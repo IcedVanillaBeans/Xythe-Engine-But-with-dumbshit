@@ -93,7 +93,7 @@
 	"no_antialiasing": false,
 	"image": "characters/picoAndNene",
 	"position": [-20, 258],
-	"healthicon": "pico",
+	"healthicon": "picoAndNene",
 	"flip_x": true,
 	"healthbar_colors": [183, 216, 85],
 	"camera_position": [90, 20],

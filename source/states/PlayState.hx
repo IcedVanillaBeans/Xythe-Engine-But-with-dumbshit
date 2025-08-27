@@ -2626,7 +2626,7 @@ class PlayState extends MusicBeatState
 					var prevAcc = Highscore.getWeekAccuracy(WeekData.weeksList[storyWeek],storyDifficulty);
 
 					var prevRank = Scoring.calculateRankFromData(prevScore,prevAcc,wasFC);
-					//FlxG.sound.playMusic(Paths.music('freakyMenu'));
+					//FlxG.sound.playMusic(Paths.music(Paths.formatToSongPath(ClientPrefs.data.menuMusic)));
 					#if DISCORD_ALLOWED DiscordClient.resetClientID(); #end
 
 					canResync = false;
