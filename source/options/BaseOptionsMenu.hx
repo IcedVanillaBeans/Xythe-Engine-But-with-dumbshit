@@ -1,5 +1,6 @@
 package options;
 
+import mikolka.funkin.custom.mobile.MobileScaleMode;
 import mobile.objects.TouchZone;
 import flixel.input.keyboard.FlxKey;
 import flixel.input.gamepad.FlxGamepad;
@@ -47,6 +48,7 @@ class BaseOptionsMenu extends MusicBeatSubstate
 
 		bg = new FlxSprite().loadGraphic(Paths.image('menuDesat'));
 		bg.color = 0xFFea71fd;
+		bg.setGraphicSize(Std.int(bg.width * 1.175));
 		bg.screenCenter();
 		bg.antialiasing = ClientPrefs.data.antialiasing;
 		add(bg);
@@ -70,15 +72,18 @@ class BaseOptionsMenu extends MusicBeatSubstate
 		titleText.alpha = 0.4;
 		add(titleText);
 
-		descText = new FlxText(50, 600, 1180, "", 32);
+		var txtWidthOffset:Float = Math.max(MobileScaleMode.gameCutoutSize.x / 2,50);
+
+		descText = new FlxText(txtWidthOffset, 600, FlxG.width-(txtWidthOffset*2), "", 32);
 		descText.setFormat(Paths.font("vcr.ttf"), 32, FlxColor.WHITE, CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
 		descText.scrollFactor.set();
 		descText.borderSize = 2.4;
 		add(descText);
 
+		var cutoutSize = MobileScaleMode.gameCutoutSize.x / 2;
 		for (i in 0...optionsArray.length)
 		{
-			var optionText:Alphabet = new Alphabet(220, 260, optionsArray[i].name, false);
+			var optionText:Alphabet = new Alphabet(cutoutSize+220, 260, optionsArray[i].name, false);
 			optionText.isMenuItem = true;
 			/*optionText.forceX = 300;
 				optionText.yMult = 90; */
@@ -161,10 +166,12 @@ class BaseOptionsMenu extends MusicBeatSubstate
 
 		if (controls.UI_UP_P)
 		{
+			FlxG.sound.play(Paths.sound('scrollMenu'));
 			changeSelection(-1,true);
 		}
 		if (controls.UI_DOWN_P)
 		{
+			FlxG.sound.play(Paths.sound('scrollMenu'));
 			changeSelection(1,true);
 		}
 
@@ -538,7 +545,6 @@ class BaseOptionsMenu extends MusicBeatSubstate
 	{
 		if (usePrecision)
 		{
-			FlxG.sound.play(Paths.sound('scrollMenu'));
 			curSelected = FlxMath.wrap(curSelected + Std.int(delta), 0, optionsArray.length - 1);
 			curSelectedPartial = curSelected;
 		}

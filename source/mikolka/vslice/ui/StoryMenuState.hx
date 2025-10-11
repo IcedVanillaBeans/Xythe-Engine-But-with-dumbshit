@@ -1,5 +1,6 @@
 package mikolka.vslice.ui;
 
+import mikolka.funkin.custom.mobile.MobileScaleMode;
 import mikolka.compatibility.VsliceOptions;
 import mikolka.vslice.components.crash.UserErrorSubstate;
 import mikolka.compatibility.freeplay.FreeplayHelpers;
@@ -65,7 +66,6 @@ class StoryMenuState extends MusicBeatState
 
 	override function create()
 	{
-		Paths.clearUnusedMemory();
 
 		if (stickerSubState != null)
 		{
@@ -79,6 +79,7 @@ class StoryMenuState extends MusicBeatState
 		}
 		else
 			Paths.clearStoredMemory();
+		Paths.clearUnusedMemory();
 
 		persistentUpdate = persistentDraw = true;
 		PlayState.isStoryMode = true;
@@ -179,7 +180,7 @@ class StoryMenuState extends MusicBeatState
 		difficultySelectors = new FlxGroup();
 		add(difficultySelectors);
 
-		leftArrow = new FlxSprite(850, grpWeekText.members[0].y + 10);
+		leftArrow = new FlxSprite(FlxG.width-430, grpWeekText.members[0].y + 10);
 		leftArrow.antialiasing = VsliceOptions.ANTIALIASING;
 		leftArrow.frames = ui_tex;
 		leftArrow.animation.addByPrefix('idle', "arrow left");
@@ -211,7 +212,7 @@ class StoryMenuState extends MusicBeatState
 		add(bgSprite);
 		add(grpWeekCharacters);
 
-		var tracksSprite:FlxSprite = new FlxSprite(FlxG.width * 0.07 + 100, bgSprite.y + 425).loadGraphic(Paths.image('Menu_Tracks'));
+		var tracksSprite:FlxSprite = new FlxSprite(FlxG.width * 0.05 + 160, bgSprite.y + 425).loadGraphic(Paths.image('Menu_Tracks'));
 		tracksSprite.antialiasing = VsliceOptions.ANTIALIASING;
 		tracksSprite.x -= tracksSprite.width / 2;
 		add(tracksSprite);
@@ -230,9 +231,9 @@ class StoryMenuState extends MusicBeatState
 		#if TOUCH_CONTROLS_ALLOWED
 		addTouchPad('LEFT_FULL', 'A_B_X_Y');
 
-		var button = new TouchZone(415, 470, 420, 160, FlxColor.PURPLE);
+		var button = new TouchZone((FlxG.width/2)-210, 460, 420, 160, FlxColor.PURPLE);
 
-		var scroll = new ScrollableObject(-0.01, 370, 0, 500, FlxG.height, button);
+		var scroll = new ScrollableObject(-0.01, (FlxG.width/2)-240, 0, 500, FlxG.height, button);
 		scroll.onPartialScroll.add(delta -> changeWeek(delta, false));
 		scroll.onFullScroll.add(delta -> {
 				changeDifficulty();
@@ -297,21 +298,18 @@ class StoryMenuState extends MusicBeatState
 			if (controls.UI_UP_P)
 			{
 				changeWeek(-1,true);
-				FlxG.sound.play(Paths.sound('scrollMenu'));
 				changeDiff = true;
 			}
 
 			if (controls.UI_DOWN_P)
 			{
 				changeWeek(1,true);
-				FlxG.sound.play(Paths.sound('scrollMenu'));
 				changeDiff = true;
 			}
 
 			if (FlxG.mouse.wheel != 0)
 			{
-				FlxG.sound.play(Paths.sound('scrollMenu'), 0.4);
-				changeWeek(-FlxG.mouse.wheel);
+				changeWeek(-FlxG.mouse.wheel,true);
 				changeDifficulty();
 			}
 
@@ -524,6 +522,8 @@ class StoryMenuState extends MusicBeatState
 		else
 		{
 			bgSprite.loadGraphic(Paths.image('menubackgrounds/menu_' + assetName));
+			// In case some 2 year old mod breaks
+			if(MobileScaleMode.enabled) bgSprite.screenCenter(X); 
 		}
 		PlayState.storyWeek = curWeek;
 

@@ -41,12 +41,14 @@ import states.InitState;
 	public var holdSplashAlpha:Float = 0.6;
 	public var lowQuality:Bool = false;
 	public var shaders:Bool = true;
-	public var cacheOnGPU:Bool = #if !switch false #else true #end; //From Stilic
+	public var cacheOnGPU:Bool = #if !switch false #else true #end; //From Stilic (I think he hates us actually)
 	public var cacheOnCPU:Bool = #if android false #else true #end;
+	public var strictLoadingScreen:Bool = false;
 	public var framerate:Int = 60;
 	public var camZooms:Bool = true;
 	public var hideHud:Bool = false;
 
+	public var vsliceMobileControls:Bool = false;
 	public var vsliceFreeplayColors:Bool = true;
 	public var vsliceResults:Bool = true;
 	public var vsliceSpecialCards:Bool = true;
