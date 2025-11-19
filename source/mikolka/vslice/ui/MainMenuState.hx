@@ -67,7 +67,7 @@ class MainMenuState extends MusicBeatState
 		add(xytheVer);
 		//var fnfVer:FlxText = new FlxText(12, FlxG.height - 24, 0, "Friday Night Funkin' ", 12);
 	
-		changeItem();
+		//changeItem();
 
 		#if ACHIEVEMENTS_ALLOWED
 		// Unlocks "Freaky on a Friday Night" achievement if it's a Friday and between 18:00 PM and 23:59 PM
