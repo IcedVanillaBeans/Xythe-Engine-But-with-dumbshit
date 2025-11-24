@@ -48,8 +48,8 @@ import flixel.tweens.FlxTween;
 import flixel.util.FlxColor;
 import flixel.util.FlxTimer;
 
-using mikolka.funkin.custom.FunkinTools;
-using mikolka.funkin.utils.ArrayTools;
+
+
 
 /**
  * Parameters used to initialize the FreeplayState.
@@ -174,7 +174,6 @@ class FreeplayState extends MusicBeatSubstate
 	var intendedScore:Int = 0;
 
 	var grpDifficulties:FlxTypedSpriteGroup<DifficultySprite>;
-	var grpFallbackDifficulty:FlxText;
 
 	var grpSongs:FlxTypedGroup<Alphabet>;
 	var grpCapsules:SongCapsuleGroup;
@@ -467,13 +466,6 @@ class FreeplayState extends MusicBeatSubstate
 		add(grpSongs);
 
 		add(grpCapsules);
-
-		grpFallbackDifficulty = new FlxText(70, 90, 250, "");
-		grpFallbackDifficulty.setFormat("VCR OSD Mono", 60, FlxColor.WHITE, CENTER, OUTLINE, FlxColor.BLACK);
-		grpFallbackDifficulty.borderSize = 2;
-		add(grpFallbackDifficulty);
-
-		
 
 		exitMovers.set([grpDifficulties], {
 			x: -300,
@@ -2008,32 +2000,23 @@ class FreeplayState extends MusicBeatSubstate
 				if (diffSprite != null && diffSprite.difficultyId == currentDifficulty)
 					return diffSprite;
 			}
-			throw "NO DIFF! Something is VERY wrong!";
+			trace("No DIFF! Perhaps it isn't available for this character...");
+			return null;
 		}
 
 		// ? This handles trans OUT
 		var diffObj = getCurrentDiff(); //
-		var diffSprite:FlxSprite = diffObj;
-		if (!diffObj.hasValidTexture)
-			diffSprite = grpFallbackDifficulty;
+		if(diffObj == null) return;
+		var diffSprite:DifficultySprite = diffObj;
 
 		if (transIn)
 		{
-			if (!diffObj.hasValidTexture)
-			{
-				grpFallbackDifficulty.text = diffObj.difficultyId;
-				grpFallbackDifficulty.updateHitbox();
-				grpFallbackDifficulty.offset.x = 15;
-			}
-			else {
-				diffSprite.visible = true;
-				grpFallbackDifficulty.text = "";
-			}
+			diffSprite.visible = true;
 
 			diffSprite.x = (change > 0) ? 500 : -320;
 			diffSprite.x += (CUTOUT_WIDTH * DJ_POS_MULTI);
 
-			FlxTween.tween(diffSprite, {x:  90 + (CUTOUT_WIDTH * DJ_POS_MULTI)}, 0.2, {
+			FlxTween.tween(diffSprite, {x:  diffSprite.widthOffset + (CUTOUT_WIDTH * DJ_POS_MULTI)}, 0.2, {
 				ease: FlxEase.circInOut
 			});
 
@@ -2057,7 +2040,7 @@ class FreeplayState extends MusicBeatSubstate
 				ease: FlxEase.circInOut,
 				onComplete: function(_)
 				{
-					diffSprite.x = 90 + (CUTOUT_WIDTH * DJ_POS_MULTI);
+					diffSprite.x = diffSprite.widthOffset + (CUTOUT_WIDTH * DJ_POS_MULTI);
 					diffSprite.visible = false;
 				}
 			});
@@ -2079,6 +2062,7 @@ class FreeplayState extends MusicBeatSubstate
 			if (!song.contains(actualSongTho) && song.contains(".partial")) // .partial
 			{
 				trace('trying to remove: ' + song);
+				var snd = cacheObj.sound.get(song);
 				openfl.Assets.cache.clear(song);
 			}
 		}
@@ -2409,7 +2393,7 @@ class FreeplayState extends MusicBeatSubstate
 	 */
 	public static function build(?params:FreeplayStateParams, ?stickers:StickerSubState):MusicBeatState
 	{
-		var result = new MainMenuState();
+		var result = new MainMenuState(true);
 		result.openSubState(new FreeplayState(params, stickers));
 		result.persistentUpdate = false;
 		result.persistentDraw = true;

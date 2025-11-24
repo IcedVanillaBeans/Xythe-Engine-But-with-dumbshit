@@ -1,5 +1,7 @@
 package states;
 
+import openfl.Assets;
+import mikolka.vslice.components.crash.UserErrorSubstate;
 import backend.PsychCamera;
 import mikolka.compatibility.VsliceOptions;
 import mikolka.stages.EventLoader;
@@ -19,7 +21,6 @@ import flixel.util.FlxSave;
 import flixel.input.keyboard.FlxKey;
 import openfl.events.KeyboardEvent;
 import mikolka.funkin.Scoring;
-import mikolka.funkin.custom.FunkinTools;
 import mikolka.vslice.results.Tallies;
 import mikolka.vslice.results.ResultState;
 import states.editors.ChartingState;
@@ -281,16 +282,17 @@ class PlayState extends MusicBeatState
 	{
 		// trace('Playback Rate: ' + playbackRate);
 		_lastLoadedModDirectory = Mods.currentModDirectory;
-		#if !STRICT_LOADING_SCREEN
+		#if STRICT_LOADING_SCREEN
 		if (!backend.ClientPrefs.data.strictLoadingScreen)
 		{
-			Paths.clearStoredMemory();
-			Paths.clearUnusedMemory();
+			CacheSystem.clearStoredMemory();
+			CacheSystem.clearUnusedMemory();
 		}
 		#end
+		
 		if (nextReloadAll)
 		{
-			Paths.clearUnusedMemory();
+			CacheSystem.clearUnusedMemory();
 			Language.reloadPhrases();
 		}
 		nextReloadAll = false;
@@ -332,6 +334,8 @@ class PlayState extends MusicBeatState
 
 		persistentUpdate = true;
 		persistentDraw = true;
+
+		if(SONG == null) throw "SONG value uninitialised!";
 
 		Conductor.mapBPMChanges(SONG);
 		Conductor.bpm = SONG.bpm;
@@ -686,7 +690,6 @@ class PlayState extends MusicBeatState
 		#end
 
 		super.create();
-		Paths.clearUnusedMemory();
 
 		cacheCountdown();
 		cachePopUpScore();
@@ -736,8 +739,7 @@ class PlayState extends MusicBeatState
 		Conductor.offset = Reflect.hasField(PlayState.SONG, 'offset') ? (PlayState.SONG.offset / value) : 0;
 		Conductor.safeZoneOffset = (ClientPrefs.data.safeFrames / 60) * 1000 * value;
 		#if VIDEOS_ALLOWED
-		if (videoCutscene != null && videoCutscene.videoSprite != null)
-			videoCutscene.videoSprite.bitmap.rate = value;
+		videoCutscene?.setSpeed(value);
 		#end
 		setOnScripts('playbackRate', playbackRate);
 		#else
@@ -885,8 +887,35 @@ class PlayState extends MusicBeatState
 		#end
 	}
 
+	// P-Slice 0.7.3 compatibility stuff
 	public function getLuaObject(tag:String, text:Bool = true):FlxSprite
 		return variables.get(tag);
+
+	public var modchartTweens(get,never):Map<String,Dynamic>;
+	function get_modchartTweens() {
+		return variables;
+	}
+	public var modchartSprites(get,never):Map<String,Dynamic>;
+	function get_modchartSprites() {
+		return variables;
+	}
+	public var modchartTimers(get,never):Map<String,Dynamic>;
+	function get_modchartTimers() {
+		return variables;
+	}
+	public var modchartSounds(get,never):Map<String,Dynamic>;
+	function get_modchartSounds() {
+		return variables;
+	}
+	public var modchartTexts(get,never):Map<String,Dynamic>;
+	function get_modchartTexts() {
+		return variables;
+	}
+	public var bfGroup(get,never):FlxSpriteGroup;
+	function get_bfGroup() {
+		return boyfriendGroup;
+	}
+	//*
 
 	function startCharacterPos(char:Character, ?gfCheck:Bool = false)
 	{
@@ -914,7 +943,7 @@ class PlayState extends MusicBeatState
 		#if sys
 		if (NativeFileSystem.exists(fileName))
 		#else
-		if (OpenFlAssets.exists(fileName))
+		if (openfl.Assets.exists(fileName))
 		#end
 		foundFile = true;
 
@@ -922,7 +951,7 @@ class PlayState extends MusicBeatState
 		{
 			videoCutscene = new VideoSprite(fileName, forMidSong, canSkip, loop);
 			if (forMidSong)
-				videoCutscene.videoSprite.bitmap.rate = playbackRate;
+				videoCutscene.setSpeed(playbackRate);
 
 			// Finish callback
 			if (!forMidSong)
@@ -1655,7 +1684,7 @@ class PlayState extends MusicBeatState
 	function eventEarlyTrigger(event:EventNote):Float
 	{
 		var returnedValue:Null<Float> = callOnScripts('eventEarlyTrigger', [event.event, event.value1, event.value2, event.strumTime], true);
-		if (returnedValue != null && returnedValue != 0)
+		if(returnedValue != null && Std.isOfType(returnedValue,Float) && returnedValue != 0) //! I hate js
 		{
 			return returnedValue;
 		}
@@ -1733,13 +1762,14 @@ class PlayState extends MusicBeatState
 			if (isHitboxArrowMode)
 			{
 				var playerArrowScale = isPixelStage? 1.2*daPixelZoom : 0.8;
+				final ARROW_SPREAD = 30;
 				babyArrow.scale.set(playerArrowScale,playerArrowScale);
 				babyArrow.updateHitbox();
 				babyArrow.x -= 25;
 				if (i > 1)
-					babyArrow.x += 15;
+					babyArrow.x += ARROW_SPREAD;
 				else 
-					babyArrow.x -= 15;
+					babyArrow.x -= ARROW_SPREAD;
 			}
 			else if(!ClientPrefs.data.middleScroll){
 				babyArrow.x += (FlxG.width-FlxG.initialWidth)/2;
@@ -4071,7 +4101,7 @@ public function startLuasNamed(luaFile:String)
 	if (NativeFileSystem.exists(luaToLoad))
 	#elseif sys
 	var luaToLoad:String = Paths.getSharedPath(luaFile);
-	if (OpenFlAssets.exists(luaToLoad))
+	if (NativeFileSystem.exists(luaToLoad))
 	#end
 	{
 		for (script in luaArray)
@@ -4113,7 +4143,8 @@ public function initHScript(file:String)
 	try
 	{
 		newScript = new HScript(null, file);
-		newScript.call('onCreate');
+		if(newScript.exists("onCreate"))
+			newScript.call('onCreate');
 		trace('initialized hscript interp successfully: $file');
 		hscriptArray.push(newScript);
 	}
