@@ -45,20 +45,16 @@ class CreditsState extends MusicBeatState
 			['TheWolfLovers',	'ace',	 'Learning Haxe and making an engine don\'t bode well together', 'https://thewolflovers.bsky.social', 'ffee00'],
 			[''],
 			['Xythe Engine Contributors'],
-			['Sam', 'sam', 'Drew all the base game character\'s icons.', '', 'ff007f'],
+			['Sam', 'sam', 'Drew all the vanilla character\'s new icons.', '', 'ff007f'],
 			['BobbyDX', 'bobbydx', 'Lumen Icon Bop, also he stole code from me /silly', 'https://github.com/bobbydeluxe', 'fcba03'],
-			['FrostyDoge!', 'doge', 'Ruined Story Mode to fix it again.', '', '00ffe1'],
-			['JarekBoho', 'jarekboho', 'Funny goobers (code wise) in chart editor', 'https://gamebanana.com/members/2145650', '170303'],
+			['JarekBoho', 'jarekboho', 'Lil buddies psych port.', 'https://gamebanana.com/members/2145650', '170303'],
 			[''],
 			['Menu Music Credits'],
 			['KGSBlue', 'Bluey', 'Between the Graves and Stars', 'https://www.youtube.com/@kgsblue1571', '0051ff'],
-			['Android Orchestra', '', 'Swore to Protect', '', '00a7d1'],
-			['GLADIUS', '', 'Go get em Lare', '', '00a7d1'],
-			['Unknown', '', 'The Final Shot', '', '00a7d1'],
+			['Masahiko Kimura', '', 'Prismod', '', '03ecfc'],
 			[''],
 			['Shout Outs'],
 			['KGSBlue', 'Bluey', 'Heaven\'s Rift has forever been immortalised! -Ace', 'https://www.youtube.com/@kgsblue1571', '0051ff'],
-			['Timber', 'glac', 'Provided the songs: Swore to Protect, Go get em Lare, The Final Shot.', '', '00a7d1'],
 			['Mikolka9144',			'mikolka',			'Made the best Psych Engine fork EVER.',								 'https://gamebanana.com/members/3329541',									'2ebcfa'],
 			[''],
 			['P-Slice Engine Team'],
@@ -99,6 +95,9 @@ class CreditsState extends MusicBeatState
 			["PhantomArcade",		"phantomarcade",	"Animator of Friday Night Funkin'",							"https://x.com/PhantomArcade3K",	"FADC45"],
 			["evilsk8r",			"evilsk8r",			"Artist of Friday Night Funkin'",							"https://x.com/evilsk8r",			"5ABD4B"],
 			["kawaisprite",			"kawaisprite",		"Composer of Friday Night Funkin'",							"https://x.com/kawaisprite",		"378FC7"],
+
+			[''],
+			['Finally the end.', '', 'I never thought we\'d ever make it to the end.'],
 		];
 		
 		for(i in defaultList)
