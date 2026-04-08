@@ -740,6 +740,7 @@ class CharSelectSubState extends MusicBeatSubState
 
 	function goToFreeplay():Void
 	{
+		staticSound.stop();
 		allowInput = false;
 		autoFollow = false; // ! Add mod support
 		// ? P-Slice mods

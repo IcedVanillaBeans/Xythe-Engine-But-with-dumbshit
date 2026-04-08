@@ -3,9 +3,9 @@
 package mobile.backend;
 
 import lime.system.System as LimeSystem;
-import haxe.io.Path;
 import haxe.Exception;
 import sys.FileSystem;
+#if android import haxe.io.Path; #end
 
 /**
  * A storage class for mobile.
@@ -105,25 +105,6 @@ class StorageUtil
 				'Notice!');
 	}
 
-	public static function checkExternalPaths(?splitStorage = false):Array<String>
-	{
-		var process = new Process('grep -o "/storage/....-...." /proc/mounts | paste -sd \',\'');
-		var paths:String = process.stdout.readAll().toString();
-		if (splitStorage)
-			paths = paths.replace('/storage/', '');
-		return paths.split(',');
-	}
-
-	public static function getExternalDirectory(externalDir:String):String
-	{
-		var daPath:String = '';
-		for (path in checkExternalPaths())
-			if (path.contains(externalDir))
-				daPath = path;
-
-		daPath = Path.addTrailingSlash(daPath.endsWith("\n") ? daPath.substr(0, daPath.length - 1) : daPath);
-		return daPath;
-	}
 	#end
 	#end
 }
@@ -136,6 +117,12 @@ enum abstract StorageType(String) from String to String
 	final packageNameLocal = 'com.mikolka9144.pslice';
 	final fileLocal = 'PSliceEngine';
 
+	//* Important note
+	// These hold cached directories from methods 
+	// that internally leak the JNI "File objects"
+	static var INTERNAL_PATH = null; 
+	static var EXTERNAL_PATH = null;
+
 	var INTERNAL = "INTERNAL";
 	var EXTERNAL = "EXTERNAL";
 
@@ -145,12 +132,17 @@ enum abstract StorageType(String) from String to String
 			return switch (str)
 			{
 				case "INTERNAL": 
-					final INTERNAL = AndroidContext.getExternalFilesDir();
-					INTERNAL;
+					if(INTERNAL_PATH == null)
+						INTERNAL_PATH = AndroidContext.getExternalFilesDir();
+					INTERNAL_PATH;
 				case "EXTERNAL": 
-					final EXTERNAL = AndroidEnvironment.getExternalStorageDirectory() + '/.' + lime.app.Application.current.meta.get('file');
-					EXTERNAL;
-				default: StorageUtil.getExternalDirectory(str) + '.' + fileLocal;
+					if(EXTERNAL_PATH == null)
+						EXTERNAL_PATH = AndroidEnvironment.getExternalStorageDirectory() + '/.' + fileLocal;
+					EXTERNAL_PATH;
+				default: 
+					if(INTERNAL_PATH == null)
+						INTERNAL_PATH = AndroidContext.getExternalFilesDir();
+					INTERNAL_PATH;
 			}
 		}
 		catch(x:Exception){
@@ -169,7 +161,7 @@ enum abstract StorageType(String) from String to String
 		{
 			case "INTERNAL": INTERNAL;
 			case "EXTERNAL": EXTERNAL;
-			default: StorageUtil.getExternalDirectory(str) + '.' + fileLocal;
+			default: INTERNAL;
 		}
 	}
 }

@@ -1,5 +1,6 @@
 package;
 
+import mikolka.vslice.components.crash.CrashServer;
 import mikolka.vslice.components.DebugDisplay.FunkinDebugDisplay;
 import mikolka.funkin.custom.mobile.MobileScaleMode;
 import states.InitState;
@@ -24,6 +25,7 @@ import lime.app.Application;
 import lime.graphics.Image;
 #end
 
+
 #if (linux && !debug)
 @:cppInclude('./external/gamemode_client.h')
 @:cppFileCode('#define GAMEMODE_AUTO')
@@ -47,6 +49,9 @@ class Main extends Sprite
 	// ? This runs before we attempt to precache things
 	public static function loadGameEarly()
 	{
+
+		CrashServer.init();
+
 		#if (linux || mac) // fix the app icon not showing up on the Linux Panel
 		var icon = lime.graphics.Image.fromFile("icon.png");
 		Lib.current.stage.window.setIcon(icon);
@@ -67,6 +72,9 @@ class Main extends Sprite
 		Sys.setCwd(StorageUtil.getStorageDirectory());
 		#end
 
+		#if mobile
+		extension.haptics.Haptic.initialize();
+		#end
 		#if sys
 
 		//cpp.vm.Gc.setTargetFreeSpacePercentage(30);
@@ -178,6 +186,8 @@ class Main extends Sprite
 			};
 			#end
 		});
+
+		CrashServer.setupInstanceId();
 
 		trace("Loading scores..");
 		Highscore.load();
@@ -291,7 +301,8 @@ class Main extends Sprite
 
 		if (debugDisplay != null)
 		{
-			debugDisplay.visible = ClientPrefs.data.showFPS;
+			debugDisplay.visible = ClientPrefs.data.showFPSOpacity != 0;
+			debugDisplay.backgroundOpacity = ClientPrefs.data.showFPSOpacity;
 			debugDisplay.isAdvanced = ClientPrefs.data.fpsRework;
 		}
 

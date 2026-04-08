@@ -5,18 +5,25 @@ body:
   - type: textarea
     id: description
     attributes:
-      label: "Describe your bug here."
+      label: "Describe your crash here."
     validations:
       required: true
 
   - type: textarea
     id: terminal
     attributes:
-      label: "Command Prompt/Terminal logs (required)"
+      label: "Terminal logs (latest.log)"
       render: bash
     validations:
-      required: true
+      required: false
 
+  - type: textarea
+    id: modding
+    attributes:
+      label: "Are you modding your build? If so, enter the mods/scripts installed."
+    validations:
+      required: true  
+  
   - type: input
     id: pslice-version
     attributes:
@@ -24,6 +31,12 @@ body:
       placeholder: "3.2.1"
     validations:
       required: true
+
+  - type: input
+    id: pslice-version
+    attributes:
+      label: "For mobile: Enter here your UserID (you can find it in latest.log)"
+      placeholder: "123" 
 
   - type: dropdown
     id: psych
@@ -37,20 +50,9 @@ body:
       required: true
 
   - type: dropdown
-    id: modding
-    attributes:
-      label: "Are you modding a build from source or with Lua?"
-      options:
-        - Lua
-        - Source
-        - No modding
-    validations:
-      required: true
-
-  - type: dropdown
     id: btarget
     attributes:
-      label: "What is your build target?"
+      label: "What platform did the issue occur?"
       options:
         - "Windows"
         - "Linux"
@@ -61,10 +63,5 @@ body:
     validations:
       required: true
 
-  - type: input
-    id: buildsummary
-    attributes:
-      label: "Did you edit anything in this build? If so, mention or summarize your changes."
-      placeholder: "Yes, I edited ClientPrefs.hx and tried to add a new setting"
-    validations:
-      required: true
+
+

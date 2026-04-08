@@ -31,3 +31,5 @@ vscode-project.hxml
 mod_core
 astc-textures
 /.idea
+setup/google-services.json
+astc-textures

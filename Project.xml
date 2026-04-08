@@ -26,9 +26,9 @@
 	<!--Switch
 	Export with Unique ApplicationID and Icon-->
 	<set name="APP_ID" value="0x0100f6c013bbc000" />
-	<meta build-number="340" />
+	<meta build-number="342" />
 	<config type="android" gradle-version="8.10.2" gradle-plugin="8.8.0" ndkVersion="27.3"
-		minimum-sdk-version="26" target-sdk-version="35" />
+		minimum-sdk-version="26" target-sdk-version="35"  />
 	<!-- NOTE TO SELF: DISABLE THIS IF ISSUES ARE FOUND -->
 	<haxedef name="LINC_LUA_RELATIVE_DYNAMIC_LIB" /> <!-- stable luas PUT AFTER FIRST LINE WITH APP
 	NAME AND ETC -->
@@ -65,7 +65,8 @@
 	<define name="DISCORD_ALLOWED" if="desktop" unless="hl" />
 
 	<!-- Adds a Base game content to your build. Feel free to disable if you're making a source mod. -->
-	<define name="BASE_GAME_FILES" unless="NO_BASEGAME_FILES" />
+	<!-- <define name="BASE_GAME_FILES" unless="NO_BASEGAME_FILES" if="web"/> -->
+	<define name="BASE_GAME_FILES"/>
 
 	<!-- Adds support for touchscreen devices (like mobiles)-->
 	<define name="TOUCH_CONTROLS_ALLOWED" if="mobile || web || debug" />
@@ -78,6 +79,9 @@
 
 	<!-- Do we want to use ATSC compression?-->
 	<define name="ATSC_SUPPORT" unless="web"/>
+
+	<!-- Enables special crash handler in case you don't trust your players to report issues properly-->
+	<define name="FIREBASE_CRASH_HANDLER" if="mobile"/>
 
 	<!-- Displays a "Touch here to play" screen-->
 	<define name="TOUCH_HERE_TO_PLAY" if="TOUCH_CONTROLS_ALLOWED debug" />
@@ -103,7 +107,7 @@
 	<section if="debug">
 		<!-- For testing file access times-->
 		<define name="OPENFL_LOOKUP" />
-		<define name="NATIVE_LOOKUP" />
+		<define unless="html5" name="NATIVE_LOOKUP" />
 
 		<define name="IRIS_DEBUG" />
 		<define name="FEATURE_DEBUG_FUNCTIONS" />
@@ -170,7 +174,7 @@
 	<!-- Assets -->
 	<assets path="assets/fonts" />
 	<assets path="assets/mobile" rename="assets/shared/mobile" if="TOUCH_CONTROLS_ALLOWED" />
-	<assets path="assets/videos" if="VIDEOS_ALLOWED" />
+	<assets path="assets/videos" if="VIDEOS_ALLOWED" embed="false"/>
 
 	<assets path="assets/shared" unless="web" />
 	<assets path="assets/shared" if="web" embed="true" />
@@ -186,7 +190,7 @@
 		<assets path="assets/secrets" rename="assets/shared" exclude="*.ogg" if="web" />
 		<assets path="assets/secrets" rename="assets/shared" unless="web" />
 	</section>
-
+>
 	<section if="TRANSLATIONS_ALLOWED">
 		<assets path="assets/translations" rename="assets" exclude="*.ogg" if="web" />
 		<assets path="assets/translations" rename="assets" unless="web" />
@@ -233,6 +237,10 @@
 	<haxelib name="hxcpp" />
 	<haxelib name="extension-haptics" if="mobile" />
 	<haxelib name="extension-androidtools" if="android" />
+	<section if="FIREBASE_CRASH_HANDLER">
+		<define name="NO_FIREBASE_ANDROID_PATCHES" />
+		<haxelib name="extension-firebase-crashlytics" />
+	</section>
 	<haxelib name="tjson" version="1.4.0" />
 	<haxelib name="grig.audio" />
 	<haxelib name="funkin.vis" />
@@ -368,6 +376,13 @@
 
 	<!-- _________________________________ Custom _______________________________ -->
 
+	<section if="FIREBASE_CRASH_HANDLER">
+		<template path="setup/google-services.json" rename="app/google-services.json"/>
+		<config:android pslice-firebase-sdk-path="yes" />
+		<template path="setup/GoogleService-Info.plist" rename="GoogleService-Info.plist" if="ios"/>
+		<template path="setup/GoogleService-Info.plist" rename="../GoogleService-Info.plist" if="ios"/>
+	</section>
+
 	<section if="PROFILE_BUILD">
 		<assets path='art/desktop/icon16.png' rename='icon.png' if="linux" />
 		<icon path="art/desktop/icon16.png" />
@@ -378,6 +393,7 @@
 	<section unless="PROFILE_BUILD">
 		<section if="mobile">
 			<config type="android" pslice-mono-icon="art/mobile/iconMono.png" />
+
 			<config type="ios" pslice-icon-dir="art/mobile/PSlice.appiconset" />
 			<icon path="art/mobile/iconAdaptive.png" if="android" />
 			<icon path="art/mobile/iconMobile.png" unless="android" />

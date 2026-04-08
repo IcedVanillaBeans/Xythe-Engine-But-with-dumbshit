@@ -9,7 +9,6 @@ class MobileOptionsSubState extends BaseOptionsMenu
 {
 	#if android
 	var storageTypes:Array<String> = ["INTERNAL", "EXTERNAL"];
-	var externalPaths:Array<String> = StorageUtil.checkExternalPaths(true);
 	var lastStorageType:String = ClientPrefs.data.storageType;
 	#end
 	final exControlTypes:Array<String> = ["NONE", "SINGLE", "DOUBLE","ARROWS"];
@@ -18,8 +17,6 @@ class MobileOptionsSubState extends BaseOptionsMenu
 
 	public function new()
 	{
-		#if android if (!externalPaths.contains('\n'))
-			storageTypes = storageTypes.concat(externalPaths); #end
 		title = 'Mobile Options';
 		rpcTitle = 'Mobile Options Menu'; // for Discord Rich Presence, fuck it
 
@@ -86,8 +83,6 @@ class MobileOptionsSubState extends BaseOptionsMenu
 		{
 			ClientPrefs.saveSettings();
 			onStorageChange();
-			CoolUtil.showPopUp('Storage Type has been changed and you needed restart the game!!\nPress OK to close the game.', 'Notice!');
-			lime.system.System.exit(0);
 		}
 		#end
 	}

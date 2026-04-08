@@ -23,7 +23,7 @@ class Mall extends BaseStage
 			upperBoppers.updateHitbox();
 			add(upperBoppers);
 
-			var bgEscalator:BGSprite = new BGSprite('christmas/bgEscalator', -1100, -540, 0.3, 0.3);
+			var bgEscalator:BGSprite = new BGSprite('christmas/bgEscalator', -690, -144, 0.3, 0.3);
 			bgEscalator.setGraphicSize(Std.int(bgEscalator.width * 0.9));
 			bgEscalator.updateHitbox();
 			add(bgEscalator);
@@ -38,13 +38,19 @@ class Mall extends BaseStage
 		var fgSnow:BGSprite = new BGSprite('christmas/fgSnow', -1150, 680);
 		add(fgSnow);
 
-		santa = new BGSprite('christmas/santa', -840, 150, 1, 1, ['santa idle in fear']);
-		add(santa);
 		Paths.sound('Lights_Shut_off');
 		setDefaultGF('gf-christmas');
 
 		if(isStoryMode && !seenCutscene)
 			setEndCallback(eggnogEndCutscene);
+	}
+
+	override function createPost()
+	{
+		super.createPost();
+
+		santa = new BGSprite('christmas/santa', -840, 150, 1, 1, ['santa idle in fear']);
+		add(santa);
 	}
 
 	override function countdownTick(count:Countdown, num:Int) everyoneDance();

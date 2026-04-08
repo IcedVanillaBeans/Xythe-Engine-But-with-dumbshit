@@ -1,0 +1,49 @@
+name: Issue in a P-Slice fork
+description: If you experience an issue in your P-Slice that could be caused by the mainline code, you can try reporting it here 
+labels: [external]
+body:
+  - type: textarea
+    attributes:
+      label: What is your issue?
+    validations:
+      required: true
+  - type: textarea
+    id: terminal
+    attributes:
+      label: "Command Prompt/Terminal logs (required)"
+      render: bash
+    validations:
+      required: true
+
+  - type: dropdown
+    id: psych
+    attributes:
+      label: "Which \"Psych engine\" version of P-Slice this occurs in"
+      options:
+        - 0.6.3
+        - 1.0.4
+        - Both
+    validations:
+      required: true
+
+  - type: dropdown
+    id: btarget
+    attributes:
+      label: "What is your build target?"
+      options:
+        - "Windows"
+        - "Linux"
+        - "Mac"
+        - "Android"
+        - "iOS"
+        - "HTML5"
+    validations:
+      required: true
+
+  - type: input
+    id: buildsummary
+    attributes:
+      label: "What changes have you made in your fork?"
+      placeholder: "I edited ClientPrefs.hx and tried to add a new setting"
+    validations:
+      required: true

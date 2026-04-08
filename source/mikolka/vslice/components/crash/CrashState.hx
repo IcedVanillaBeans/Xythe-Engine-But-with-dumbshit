@@ -1,5 +1,6 @@
 package mikolka.vslice.components.crash;
 
+import mikolka.vslice.components.crash.UserErrorSubstate.CrashData;
 import mikolka.compatibility.VsliceOptions;
 import mikolka.compatibility.ModsHelper;
 import flixel.FlxState;
@@ -16,13 +17,11 @@ import haxe.io.Path;
 class CrashState extends FlxState
 {
 	var screenBelow:BitmapData;
-	var EMessage:String;
-    var callstack:Array<StackItem>;
+	var stateCrash:CrashData;
 
-	public function new(EMessage:String,callstack:Array<StackItem>)
+	public function new(crash:CrashData)
 	{
-		this.EMessage = EMessage;
-		this.callstack = callstack;
+		this.stateCrash = crash;
 		super();
 	}
 
@@ -35,13 +34,11 @@ class CrashState extends FlxState
 		#if DISCORD_ALLOWED
 		DiscordClient.shutdown();
 		#end
-		var crash = UserErrorSubstate.collectErrorData(EMessage,callstack);
-		#if sys saveError(crash); #end
 		var previousScreen = new FlxSprite(0, 0, BitmapData.fromImage(FlxG.stage.window.readPixels()));
 		previousScreen.setGraphicSize(FlxG.width,FlxG.height);
 		previousScreen.updateHitbox();
 		add(previousScreen);
-		openSubState(new UserErrorSubstate(crash,true));
+		openSubState(new UserErrorSubstate(stateCrash,true));
 		
 	}
 	#if sys
@@ -64,13 +61,8 @@ class CrashState extends FlxState
             errMsg += '\n';
             errMsg += '\nPlease report this error to the GitHub page: https://github.com/Psych-Slice/P-Slice\n\n> Crash Handler written by: sqirra-rng';
     
-            #if !LEGACY_PSYCH
-            @:privateAccess // lazy
-            backend.CrashHandler.saveErrorMessage(errMsg + '\n');
-            #else
             var path = './crash/' + 'PSlice_' + dateNow + '.txt';
             File.saveContent(path, errMsg + '\n');
-            #end
             Sys.println(errMsg);
         }
     #end

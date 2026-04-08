@@ -86,7 +86,7 @@ class Scoring
 	{ 
 		var sngScore:Int = scoreData.score;
 		var sngAccuracy:Float = Math.min(1,scoreData.accPoints/scoreData.totalNotesHit);
-		var sngFC:Bool = scoreData.missed == 0;
+		var sngFC:Bool = scoreData.missed+scoreData.bad+scoreData.shit == 0;
 		if(scoreData.totalNotesHit == 0) sngAccuracy = 0;
 		return calculateRankFromData(sngScore,sngAccuracy,sngFC);
 		

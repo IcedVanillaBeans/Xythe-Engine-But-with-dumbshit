@@ -20,6 +20,7 @@ class InitState extends MusicBeatState
 	public static var volumeUpKeys:Array<FlxKey> = [FlxKey.NUMPADPLUS, FlxKey.PLUS];
 
     var mustUpdate:Bool = false;
+	public static var updateAlreadyShown:Bool = false;
 	public static var updateVersion:String = '';
 
 
@@ -99,7 +100,8 @@ class InitState extends MusicBeatState
 			FlxTransitionableState.skipNextTransOut = true;
 			MusicBeatState.switchState(new FlashingState(new TitleState()));
 		}
-        else if (mustUpdate){
+        else if (mustUpdate && !updateAlreadyShown){
+			updateAlreadyShown = true;
             MusicBeatState.switchState(new OutdatedState(updateVersion,new TitleState()));
         }
 		else

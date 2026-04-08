@@ -125,12 +125,8 @@ class MasterEditorMenu extends MusicBeatState
 					MusicBeatState.switchState(new CharSelectEditor());
 				#if PROFILE_BUILD
 				case 'Crash the game':{
-					trace("Break the the StackOverflow.com");
-					var fnc = null;
-					fnc = () -> {
-						fnc();
-					}
-					fnc();
+					trace("Break the StackOverflow.com");
+					untyped __cpp__("throw \"This is a native C++ exception!\";");
 				}
 				case 'Usermess the game':{
 					UserErrorSubstate.makeMessage("The devs are too stupid and they write way too long errors","Skill issue :/");
@@ -140,37 +136,5 @@ class MasterEditorMenu extends MusicBeatState
 					MusicBeatState.switchState(new ResultPreviewMenu());
 			}
 			FlxG.sound.music.volume = 0;
-	}
-
-	function runResults(lol:Int)
-	{
-		PlayState.storyDifficultyColor = 0xFFFF0000;
-		Difficulty.resetList();
-		PlayState.storyDifficulty = 2;
-		var results = new ResultState({
-			storyMode: true,
-			prevScoreRank: EXCELLENT,
-			title: "Cum Song Erect by Kawai Sprite",
-			songId: "cum",
-			difficultyId: "nightmare",
-			isNewHighscore: true,
-			characterId: '',
-			scoreData: {
-				score: 1_234_567,
-				accPoints: lol,
-				sick: 199,
-				good: 0,
-				bad: 0,
-				shit: 0,
-				missed: 1,
-				combo: 0,
-				maxCombo: 69,
-				totalNotesHit: 200,
-				totalNotes: 200 // 0,
-			},
-		});
-		@:privateAccess
-		results.playerCharacterId = VsliceOptions.LAST_MOD.char_name;
-		MusicBeatState.switchState(results);
 	}
 }

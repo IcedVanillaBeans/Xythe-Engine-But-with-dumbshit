@@ -18,16 +18,18 @@ body:
     validations:
       required: false
 
-  - type: dropdown
+  - type: textarea
     id: modding
     attributes:
-      label: "Are you modding a build from source or with Lua?"
-      options:
-        - Lua
-        - Source
-        - No modding
+      label: "Are you modding your build? If so, enter the mods/scripts installed."
     validations:
       required: true  
+      
+  - type: input
+    id: user-id
+    attributes:
+      label: "For mobile: Enter here your UserID (you can find it in latest.log)"
+      placeholder: "123" 
 
   - type: input
     id: pslice-version
@@ -51,7 +53,7 @@ body:
   - type: dropdown
     id: btarget
     attributes:
-      label: "What is your build target?"
+      label: "What platform did the issue occur?"
       options:
         - "Windows"
         - "Linux"
@@ -63,10 +65,4 @@ body:
       required: true
       
 
-  - type: input
-    id: buildsummary
-    attributes:
-      label: "Did you edit anything in this build? If so, mention or summarize your changes."
-      placeholder: "Yes, I edited ClientPrefs.hx and tried to add a new setting"
-    validations:
-      required: true
+

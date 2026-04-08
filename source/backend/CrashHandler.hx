@@ -1,5 +1,7 @@
 package backend;
 
+import mikolka.vslice.components.crash.CrashServer;
+import mikolka.vslice.components.crash.UserErrorSubstate;
 import mikolka.vslice.components.crash.CrashState;
 import haxe.CallStack;
 import openfl.events.UncaughtErrorEvent;
@@ -32,7 +34,13 @@ class CrashHandler
 
 	private static function onUncaughtError(e:UncaughtErrorEvent):Void
 	{
-		var crashState = new CrashState(e.error,CallStack.exceptionStack(true));
+		var errorStack = CallStack.exceptionStack(true);
+		#if FIREBASE_CRASH_HANDLER
+		CrashServer.onCrash();
+        Crashlytics.sendCrashData(e.error,errorStack);
+        #end
+		var crash = UserErrorSubstate.collectErrorData(e.error,errorStack);
+		var crashState = new CrashState(crash);
 		e.preventDefault();
 		FlxG.switchState(crashState);
 	}
@@ -46,31 +54,16 @@ class CrashHandler
 			log.push(message);
 
 		log.push(haxe.CallStack.toString(haxe.CallStack.exceptionStack(true)));
-
+		var logMsg = log.join('\n');
 		#if sys
-		saveErrorMessage(log.join('\n'));
+		var path = './crash/' + 'PSlice_' + Date.now().toString() + '.txt';
+        File.saveContent(path, logMsg + '\n');
 		#end
+		trace(logMsg);
 
-		CoolUtil.showPopUp(log.join('\n'), "Critical Error!");
+		CoolUtil.showPopUp(logMsg, "Critical Error!");
 		#if DISCORD_ALLOWED DiscordClient.shutdown(); #end
 		lime.system.System.exit(1);
-	}
-	#end
-
-	#if sys
-	private static function saveErrorMessage(message:String):Void
-	{
-		try
-		{
-			if (!NativeFileSystem.exists('logs'))
-				NativeFileSystem.createDirectory('logs');
-
-			File.saveContent('logs/'
-				+ Date.now().toString().replace(' ', '-').replace(':', "'")
-				+ '.txt', message);
-		}
-		catch (e:haxe.Exception)
-			trace('Couldn\'t save error message. (${e.message})');
 	}
 	#end
 }

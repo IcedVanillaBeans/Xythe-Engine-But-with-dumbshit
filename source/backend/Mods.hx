@@ -1,5 +1,6 @@
 package backend;
 
+import mikolka.vslice.components.crash.CrashServer;
 import openfl.utils.Assets;
 import haxe.Json;
 
@@ -11,7 +12,7 @@ typedef ModsList = {
 
 class Mods
 {
-	static public var currentModDirectory:String = '';
+	static public var currentModDirectory(default,set):String = '';
 	public static final ignoreModFolders:Array<String> = [
 		'characters',
 		'events',
@@ -44,6 +45,7 @@ class Mods
 			var pack:Dynamic = getPack(mod);
 			if(pack != null && pack.runsGlobally) globalMods.push(mod);
 		}
+		CrashServer.updateGlobalMods(globalMods);
 		return globalMods;
 	}
 
@@ -233,5 +235,10 @@ class Mods
 		if(list != null && list[0] != null)
 			Mods.currentModDirectory = list[0];
 		#end
+	}
+
+	static function set_currentModDirectory(value:String):String {
+		CrashServer.updateModDir(value);
+		return currentModDirectory = value;
 	}
 }

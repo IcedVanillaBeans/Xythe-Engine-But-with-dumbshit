@@ -4,10 +4,6 @@ import mikolka.funkin.custom.mobile.MobileScaleMode;
 import mikolka.vslice.components.crash.UserErrorSubstate;
 import backend.StageData;
 import flixel.FlxObject;
-#if (target.threaded)
-import sys.thread.Mutex;
-import sys.thread.Thread;
-#end
 
 class OptionsState extends MusicBeatState
 {
@@ -19,6 +15,7 @@ class OptionsState extends MusicBeatState
 		'Visuals',
 		'Gameplay',
 		'P-Slice Options',
+		'V-Slice Options',
 		#if TRANSLATIONS_ALLOWED  'Language', #end
 		#if (TOUCH_CONTROLS_ALLOWED || mobile)'Mobile Options' #end
 	];
@@ -28,7 +25,6 @@ class OptionsState extends MusicBeatState
 	public static var menuBG:FlxSprite;
 	public static var onPlayState:Bool = false;
 	var exiting:Bool = false;
-	#if (target.threaded) var mutex:Mutex = new Mutex(); #end
 
 	private var mainCam:FlxCamera;
 	public static var funnyCam:FlxCamera;
@@ -61,7 +57,9 @@ class OptionsState extends MusicBeatState
 			case 'Adjust Delay and Combo':
 				MusicBeatState.switchState(new options.NoteOffsetState());
 			case 'P-Slice Options':
-				openSubState(new BaseGameSubState());
+				openSubState(new PSliceSubState());
+			case 'V-Slice Options':
+				openSubState(new VSliceSubState());
 			#if (TOUCH_CONTROLS_ALLOWED || mobile)
 			case 'Mobile Options':
 				openSubState(new mobile.options.MobileOptionsSubState());
@@ -114,20 +112,6 @@ class OptionsState extends MusicBeatState
 
 		changeSelection(0,true);
 		ClientPrefs.saveSettings();
-
-		#if (target.threaded)
-		Thread.create(()->{
-			mutex.acquire();
-
-			for (music in VisualsSettingsSubState.pauseMusics)
-			{
-				if (music.toLowerCase() != "none")
-					Paths.music(Paths.formatToSongPath(music));
-			}
-
-			mutex.release();
-		});
-		#end
 
 		#if TOUCH_CONTROLS_ALLOWED
 		addTouchPad('UP_DOWN', 'A_B');

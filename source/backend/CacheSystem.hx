@@ -79,8 +79,9 @@ class CacheSystem
 				// }
 			}
 		}
-
-		System.gc();
+		#if cpp
+		cpp.vm.Gc.compact();
+		#end
 	}
 
 	#if debug

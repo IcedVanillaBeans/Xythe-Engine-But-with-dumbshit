@@ -289,6 +289,9 @@ class PlayState extends MusicBeatState
 			CacheSystem.clearUnusedMemory();
 		}
 		#end
+		#if cpp
+		cpp.vm.Gc.run(true);
+		#end
 		
 		if (nextReloadAll)
 		{
@@ -2935,7 +2938,8 @@ public function endSong()
 					StoryMenuState.weekCompleted.set(WeekData.weeksList[storyWeek], true);
 
 					var weekAccuracy = FlxMath.bound(campaignSaveData.accPoints / campaignSaveData.totalNotesHit, 0, 1);
-					Highscore.saveWeekScore(WeekData.getWeekFileName(), campaignScore, storyDifficulty, weekAccuracy, campaignMisses == 0);
+					var comboBreakCount = campaignSaveData.missed+campaignSaveData.bad+campaignSaveData.shit;
+					Highscore.saveWeekScore(WeekData.getWeekFileName(), campaignScore, storyDifficulty, weekAccuracy, comboBreakCount == 0);
 
 					FlxG.save.data.weekCompleted = StoryMenuState.weekCompleted;
 					FlxG.save.flush();
@@ -2985,7 +2989,8 @@ public function endSong()
 				var percent:Float = ratingPercent;
 				if (Math.isNaN(percent))
 					percent = 0;
-				Highscore.saveScore(SONG.song, songScore, storyDifficulty, percent, songMisses == 0);
+				var comboBreakCount = tempActiveTallises.missed+tempActiveTallises.bad+tempActiveTallises.shit;
+				Highscore.saveScore(SONG.song, songScore, storyDifficulty, percent, comboBreakCount == 0);
 			}
 			#end
 		}
@@ -3004,7 +3009,8 @@ function zoomIntoResultsScreen(isNewHighscore:Bool, scoreData:SaveScoreData, pre
 	if (!ClientPrefs.data.vsliceResults || botplay)
 	{
 		var resultingAccuracy = Math.min(1, scoreData.accPoints / scoreData.totalNotesHit);
-		var fpRank = Scoring.calculateRankFromData(scoreData.score, resultingAccuracy, scoreData.missed == 0) ?? SHIT;
+		var comboBreakCount = scoreData.missed+scoreData.bad+scoreData.shit;
+		var fpRank = Scoring.calculateRankFromData(scoreData.score, resultingAccuracy, comboBreakCount== 0) ?? SHIT;
 		if (isNewHighscore && !isStoryMode)
 		{
 			camOther.fade(FlxColor.BLACK, 0.6, false, () ->
@@ -3205,6 +3211,8 @@ private function popUpScore(note:Note = null):Void
 
 	// tryna do MS based judgment due to popular demand
 	var daRating:Rating = Conductor.judgeNote(ratingsData, noteDiff / playbackRate);
+
+	if(daRating.name == "bad" || daRating.name == "shit") combo = 0; //V-Slice combo thingy
 
 	totalNotesHit += daRating.ratingMod;
 	note.ratingMod = daRating.ratingMod;
