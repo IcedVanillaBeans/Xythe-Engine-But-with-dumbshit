@@ -40,6 +40,9 @@ class LoadingState extends MusicBeatState
 	static var originalBitmapKeys:Map<String, String> = [];
 	static var requestedBitmaps:Map<String, BitmapData> = [];
 	static var mutex:Mutex;
+	// Separate mutex for the prepare-arrays (imagesToPrepare etc).
+	// These are written from worker threads (preloadCharacter) and read from the main thread.
+	static var prepMutex:Mutex;
 	static var threadPool:FixedThreadPool = null;
 
 	function new(target:FlxState, stopMusic:Bool)
@@ -380,21 +383,41 @@ class LoadingState extends MusicBeatState
 		if (threadPool != null)
 			threadPool.shutdown(); // kill all workers safely
 		threadPool = null;
-		mutex = null;
+		// FIX: null mutex AFTER pool shutdown so lingering threads don't crash on acquire
+		mutex    = null;
+		prepMutex = null;
 	}
 
 	public static function checkLoaded():Bool
 	{
-		for (key => bitmap in requestedBitmaps)
+		// FIX: worker threads may still be writing to requestedBitmaps concurrently.
+		// Snapshot and clear under mutex, then process the snapshot on the main thread.
+		var bitmapSnapshot:Map<String, BitmapData> = null;
+		var keySnapshot:Map<String, String> = null;
+		if (mutex != null)
 		{
-			if (bitmap != null && CacheSystem.cacheBitmap(originalBitmapKeys.get(key), bitmap) != null)
+			mutex.acquire();
+			bitmapSnapshot = requestedBitmaps;
+			keySnapshot    = originalBitmapKeys;
+			requestedBitmaps    = [];
+			originalBitmapKeys  = [];
+			mutex.release();
+		}
+		else
+		{
+			bitmapSnapshot = requestedBitmaps;
+			keySnapshot    = originalBitmapKeys;
+			requestedBitmaps   = [];
+			originalBitmapKeys = [];
+		}
+		for (key => bitmap in bitmapSnapshot)
+		{
+			if (bitmap != null && CacheSystem.cacheBitmap(keySnapshot.get(key), bitmap) != null)
 			{
 			} // trace('finished preloading image $key');
 			else
 				trace('failed to cache image $key');
 		}
-		requestedBitmaps.clear();
-		originalBitmapKeys.clear();
 		// trace('we checked if loaded');
 		return (loaded >= loadMax && initialThreadCompleted);
 	}
@@ -482,6 +505,7 @@ class LoadingState extends MusicBeatState
 		}
 
 		_startPool();
+		prepMutex = new Mutex();
 		imagesToPrepare.clear();
 		soundsToPrepare.clear();
 		musicToPrepare.clear();
@@ -490,12 +514,18 @@ class LoadingState extends MusicBeatState
 		initialThreadCompleted = false;
 		var threadsCompleted:Int = 0;
 		var threadsMax:Int = 0;
+		var completionMutex:Mutex = new Mutex(); // FIX: guard threadsCompleted++ race
 		function completedThread()
 		{
+			completionMutex.acquire();
 			threadsCompleted++;
-			if (threadsCompleted == threadsMax)
+			var done = (threadsCompleted == threadsMax);
+			completionMutex.release();
+			if (done) // only one thread sees done=true; safe to call without mutex
 			{
+				prepMutex.acquire();
 				clearInvalids();
+				prepMutex.release();
 				startThreads();
 				initialThreadCompleted = true;
 			}
@@ -752,7 +782,7 @@ class LoadingState extends MusicBeatState
 
 	static function _threadFunc()
 	{
-		_startPool();
+		// FIX: pool is already created by prepareToSong/_startPool — don't recreate it here
 		for (sound in soundsToPrepare)
 			initThread(() -> preloadSound('sounds/$sound'), 'sound $sound');
 		for (music in musicToPrepare)
@@ -794,10 +824,14 @@ class LoadingState extends MusicBeatState
 			{
 				trace('ERROR! fail on preloading $traceData: $e');
 			}
-			mutex.acquire();
-			loaded++;
-			trace('$loaded/$loadMax assets loaded');
-			mutex.release();
+			// FIX: mutex may be null if _loaded() was called before this thread finished
+			if (mutex != null)
+			{
+				mutex.acquire();
+				loaded++;
+				trace('$loaded/$loadMax assets loaded');
+				mutex.release();
+			}
 		});
 	}
 
@@ -820,14 +854,16 @@ class LoadingState extends MusicBeatState
 			if (!isAnimateAtlas)
 			{
 				var split:Array<String> = img.split(',');
+				// FIX: imagesToPrepare may be written concurrently from multiple character threads
+				if (prepMutex != null) prepMutex.acquire();
 				for (file in split)
-				{
 					imagesToPrepare.push(file.trim());
-				}
+				if (prepMutex != null) prepMutex.release();
 			}
 			#if flxanimate
 			else
 			{
+				var atlasImg:String = null;
 				for (i in 0...10)
 				{
 					var st:String = '$i';
@@ -836,17 +872,24 @@ class LoadingState extends MusicBeatState
 
 					if (Paths.fileExists('images/$img/spritemap$st.png', IMAGE))
 					{
-						// trace('found Sprite PNG');
-						imagesToPrepare.push('$img/spritemap$st');
+						atlasImg = '$img/spritemap$st';
 						break;
 					}
+				}
+				if (atlasImg != null)
+				{
+					if (prepMutex != null) prepMutex.acquire();
+					imagesToPrepare.push(atlasImg);
+					if (prepMutex != null) prepMutex.release();
 				}
 			}
 			#end
 
 			if (prefixVocals != null && character.vocals_file != null && character.vocals_file.length > 0)
 			{
+				if (prepMutex != null) prepMutex.acquire();
 				songsToPrepare.push(prefixVocals + "-" + character.vocals_file);
+				if (prepMutex != null) prepMutex.release();
 				if (char == PlayState.SONG.player1)
 					dontPreloadDefaultVoices = true;
 			}
