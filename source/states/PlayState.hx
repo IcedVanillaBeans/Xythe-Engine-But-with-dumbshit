@@ -7,6 +7,7 @@ import mikolka.compatibility.VsliceOptions;
 import mikolka.stages.EventLoader;
 import mikolka.vslice.StickerSubState;
 import mikolka.vslice.freeplay.FreeplayState;
+import mikolka.vslice.ui.MainMenuState;
 import backend.Highscore;
 import backend.StageData;
 import backend.WeekData;
@@ -70,11 +71,11 @@ class PlayState extends MusicBeatState
 	public static var STRUM_X_MIDDLESCROLL = -278;
 
 	public static var ratingStuff:Array<Dynamic> = [
-		['You Suck!', 0.2], //From 0% to 19%
+		['Terrible', 0.2], //From 0% to 19%
 		['Horrible', 0.4], //From 20% to 39%
-		['Terrible', 0.5], //From 40% to 49%
+		['Surviving', 0.5], //From 40% to 49%
 		['Bad', 0.6], //From 50% to 59%
-		['Surviving...', 0.69], //From 60% to 68%
+		['Alright', 0.69], //From 60% to 68%
 		['Nice', 0.7], //69%
 		['Good', 0.8], //From 70% to 79%
 		['Great', 0.9], //From 80% to 89%
@@ -211,7 +212,10 @@ class PlayState extends MusicBeatState
 	public var songHits:Int = 0;
 	public var songMisses:Int = 0;
 	public var scoreTxt:FlxText;
+	public var xytheEngineVersion:String = MainMenuState.xytheEngineVersion;
+	var watermark:FlxText;
 
+	var markType:String = ClientPrefs.data.watermarkType;
 	var timeTxt:FlxText;
 	var scoreTxtTween:FlxTween;
 
@@ -564,6 +568,23 @@ class PlayState extends MusicBeatState
 		healthBar.alpha = ClientPrefs.data.healthBarAlpha;
 		reloadHealthBarColors();
 		uiGroup.add(healthBar);
+
+		watermark = new FlxText(0, FlxG.height - 50, 0, "", 20);
+		watermark.setFormat(Paths.font("vcr.ttf"), 17, FlxColor.WHITE, LEFT, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+		watermark.scrollFactor.set();
+		watermark.visible = !ClientPrefs.data.hideHud;
+
+		if (markType == "Minimal") {
+			watermark.text = "[XE]";
+		} else if (markType == "Small") {
+			watermark.text = "[XE | " + SONG.song + "]";
+		} else if (markType == "Normal") {
+			watermark.text = "[Xythe Engine | " + SONG.song + " | " + storyDifficultyText + "]";
+		} else if (markType == "Large") {
+			watermark.text = "[Xythe Engine " + xytheEngineVersion + " | " + SONG.song + " | " + storyDifficultyText + "]";
+		}
+
+		uiGroup.add(watermark);
 
 		scoreTxt = new FlxText(0, healthBar.y + 50, FlxG.width, "", 20);
 		scoreTxt.setFormat(Paths.font("vcr.ttf"), 20, FlxColor.WHITE, CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);

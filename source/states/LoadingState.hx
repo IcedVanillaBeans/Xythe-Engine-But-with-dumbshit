@@ -233,18 +233,33 @@ class LoadingState extends MusicBeatState
 		if (dontUpdate)
 			return;
 
+		loadingTimeElapsed += elapsed;
+
+		// Drain the GPU upload queue — max MAX_GPU_PER_FRAME uploads per frame
+		// to spread the GPU texture upload spike across multiple frames.
+		var uploaded = 0;
+		while (gpuUploadQueue.length > 0 && uploaded < MAX_GPU_PER_FRAME)
+		{
+			var item = gpuUploadQueue.shift();
+			CacheSystem.cacheBitmap(item.key, item.bitmap);
+			uploaded++;
+		}
+
 		if (!transitioning)
 		{
-			if (!finishedLoading && checkLoaded())
+			if (!finishedLoading && checkLoaded() && gpuUploadQueue.length == 0)
 			{
-				if (stateChangeDelay <= 0)
+				if (stateChangeDelay <= 0 && loadingTimeElapsed >= MIN_LOADING_TIME)
 				{
 					transitioning = true;
 					onLoad();
 					return;
 				}
 				else
-					stateChangeDelay = Math.max(0, stateChangeDelay - elapsed);
+				{
+					if (loadingTimeElapsed >= MIN_LOADING_TIME)
+						stateChangeDelay = Math.max(0, stateChangeDelay - elapsed);
+				}
 			}
 			intendedPercent = loaded / loadMax;
 		}
@@ -356,6 +371,18 @@ class LoadingState extends MusicBeatState
 	}
 	#end
 
+	// ── GPU upload queue ──────────────────────────────────────────────────────
+	// cacheBitmap() uploads BitmapData to GPU as a texture. Doing all uploads
+	// in a single frame causes a massive CPU/GPU spike right before gameplay.
+	// Instead we queue pending bitmaps and promote MAX_GPU_PER_FRAME per frame.
+	static final MAX_GPU_PER_FRAME:Int = 4;
+	static var gpuUploadQueue:Array<{key:String, bitmap:BitmapData}> = [];
+
+	// Minimum time (seconds) the loading screen stays visible.
+	// Prevents a 1-frame flash when assets are already cached.
+	static final MIN_LOADING_TIME:Float = 0.5;
+	static var loadingTimeElapsed:Float = 0;
+
 	var finishedLoading:Bool = false;
 
 	function onLoad()
@@ -384,6 +411,35 @@ class LoadingState extends MusicBeatState
 			threadPool.shutdown(); // kill all workers safely
 		threadPool = null;
 		// FIX: null mutex AFTER pool shutdown so lingering threads don't crash on acquire
+		// FIX 2: drain requestedBitmaps one final time before nulling the mutex.
+		// A thread can finish its NativeFileSystem.getBitmap call and write into
+		// requestedBitmaps AFTER the last checkLoaded() snapshot but BEFORE shutdown.
+		// Without this drain those bitmaps are permanently orphaned — the PNG is in
+		// memory but no FlxGraphic exists in the cache, causing Paths.getAtlas to
+		// reload the bitmap fresh and pair it with the wrong (or no) GPU texture.
+		var finalBitmaps:Map<String, BitmapData>;
+		var finalKeys:Map<String, String>;
+		if (mutex != null)
+		{
+			mutex.acquire();
+			finalBitmaps = requestedBitmaps;
+			finalKeys    = originalBitmapKeys;
+			requestedBitmaps   = [];
+			originalBitmapKeys = [];
+			mutex.release();
+		}
+		else
+		{
+			finalBitmaps = requestedBitmaps;
+			finalKeys    = originalBitmapKeys;
+			requestedBitmaps   = [];
+			originalBitmapKeys = [];
+		}
+		for (key => bitmap in finalBitmaps)
+		{
+			if (bitmap != null)
+				CacheSystem.cacheBitmap(finalKeys.get(key), bitmap);
+		}
 		mutex    = null;
 		prepMutex = null;
 	}
@@ -391,7 +447,7 @@ class LoadingState extends MusicBeatState
 	public static function checkLoaded():Bool
 	{
 		// FIX: worker threads may still be writing to requestedBitmaps concurrently.
-		// Snapshot and clear under mutex, then process the snapshot on the main thread.
+		// Snapshot and clear under mutex, then queue bitmaps for gradual GPU upload.
 		var bitmapSnapshot:Map<String, BitmapData> = null;
 		var keySnapshot:Map<String, String> = null;
 		if (mutex != null)
@@ -410,15 +466,16 @@ class LoadingState extends MusicBeatState
 			requestedBitmaps   = [];
 			originalBitmapKeys = [];
 		}
+		// Queue for gradual GPU upload — MAX_GPU_PER_FRAME per frame in update().
+		// Previously all bitmaps were cacheBitmap'd here in one call, causing a
+		// single-frame GPU spike that produced the large stutter at song start.
 		for (key => bitmap in bitmapSnapshot)
 		{
-			if (bitmap != null && CacheSystem.cacheBitmap(keySnapshot.get(key), bitmap) != null)
-			{
-			} // trace('finished preloading image $key');
+			if (bitmap != null)
+				gpuUploadQueue.push({key: keySnapshot.get(key), bitmap: bitmap});
 			else
 				trace('failed to cache image $key');
 		}
-		// trace('we checked if loaded');
 		return (loaded >= loadMax && initialThreadCompleted);
 	}
 
@@ -446,6 +503,8 @@ class LoadingState extends MusicBeatState
 		LoadingState.isIntrusive = intrusive;
 		_startPool();
 		loadNextDirectory();
+		gpuUploadQueue = [];
+		loadingTimeElapsed = 0;
 
 		if (intrusive)
 			return new LoadingState(target, stopMusic);
@@ -958,6 +1017,9 @@ class LoadingState extends MusicBeatState
 					mutex.acquire();
 					requestedBitmaps.set(file, bitmap);
 					originalBitmapKeys.set(file, requestKey);
+					// Track the normalised key so clearStoredMemory won't evict this
+					// graphic between when the bitmap is promoted and when the song loads.
+					CacheSystem.localTrackedAssets.push(requestKey);
 					mutex.release();
 					return bitmap;
 				}

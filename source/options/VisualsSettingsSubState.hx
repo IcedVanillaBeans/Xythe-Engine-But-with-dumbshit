@@ -122,11 +122,18 @@ class VisualsSettingsSubState extends BaseOptionsMenu
 			['Time Left', 'Time Elapsed', 'Song Name', 'Disabled']);
 		addOption(option);
 
+		var option:Option = new Option("Engine Watermark:",
+			"How do you want the watermark to be displayed?",
+			"watermarkType",
+			STRING,
+			["Minimal", "Small", "Normal", "Large"]);
+		addOption(option);
+		
 		var option:Option = new Option("Icon Bop type:",
 			"Which icon bop do you want to see?",
 			"bopType",
 			STRING,
-			['Normal', 'Kade', 'Lumen']); //todo: [, 'Twist', 'Lo-HP Shake'] //scrapped: Old vanilla (is now Vintage)
+			['Normal', 'Kade', 'Lumen']); //todo: [, 'Twist', 'Lo-HP Shake']
 		addOption(option);
 
 		var option:Option = new Option('Flashing Lights',

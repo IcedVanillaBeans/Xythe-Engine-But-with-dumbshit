@@ -1,31 +1,24 @@
 package mikolka.stages.scripts;
 
-import flixel.FlxCamera.FlxCameraFollowStyle;
 import flixel.FlxObject;
+import flixel.math.FlxMath;
+import psychlua.LuaUtils;
+import openfl.geom.Point;
+import substates.GameOverSubstate;
+import flixel.FlxCamera.FlxCameraFollowStyle;
 import flixel.tweens.FlxEase;
 import flixel.tweens.FlxTween;
 import objects.Note;
-import psychlua.LuaUtils;
-import substates.GameOverSubstate;
+using StringTools;
 
 /**
  * VSliceEvents — native Haxe port of VSliceGeneral.hx (HScript).
- *
- * Handles V-Slice chart events faithfully inside P-Slice's BaseStage system.
- * Replaces the original VSliceEvents.hx stub entirely.
- *
- * Supported events:
- *   FocusCamera, ZoomCamera, SetCameraBop, SetTargetBopSpeed,
- *   ScrollSpeed, PlayAnimation, Camera Follow Pos, Add Camera Zoom
- *
- * NOTE: P-Slice's PlayState only calls these BaseStage hooks via stagesFunc:
- *   createPost, eventCalled, goodNoteHit, opponentNoteHit.
- * Beat/section detection is therefore done by tracking curBeat/curSection
- * changes inside update(), which is called by Flixel automatically.
+ * Logic is translated 1:1 from VSliceGeneral. Only the mechanism differs:
+ * HScript callbacks (onUpdatePost, onBeatHit etc.) become BaseStage overrides.
  */
 class VSliceEvents extends BaseStage
 {
-	// ── Defaults ─────────────────────────────────────────────────────────────
+	// ── Defaults (mirrors VSliceGeneral constants exactly) ────────────────────
 
 	static final DEFAULT_DURATION:Float  = 4.0;
 	static final DEFAULT_MODE:String     = 'direct';
@@ -40,32 +33,24 @@ class VSliceEvents extends BaseStage
 	static final DEFAULT_RATE:Float          = 4.0;
 	static final DEFAULT_BOP_INTENSITY:Float = 1.0;
 
-	// ── Camera follow state ───────────────────────────────────────────────────
+	// ── State (mirrors VSliceGeneral vars exactly) ────────────────────────────
 
+	// Separate follow point — PlayState never touches this object.
+	// tweenCameraToPosition tweens this; onUpdatePost writes scroll from it.
 	var camFollowPoint:FlxObject = new FlxObject(0, 0, 1, 1);
 
-	var camZoom:Float = 1.0; // authoritative zoom target
-	var camBop:Float  = 1.0; // live bop multiplier
+	var curCamera = {zoom: 1.0, bop: 1.0};
 
-	var camZoomRate:Float      = DEFAULT_RATE;
+	var camZoomRate:Float     = DEFAULT_RATE;
 	var camZoomRateOffset:Float = 0.0;
-
 	var camZoomingVSlice:Bool = false;
-	var followTweenActive:Bool = false;
-	var zoomTweenActive:Bool   = false;
+
+	var followTweenVSlice:Bool = false;
+	var zoomTweenVSlice:Bool   = false;
 
 	var isCamFollowVSlice:Bool = false;
 	var isCamZoomVSlice:Bool   = false;
 	var isCameraBop:Bool       = false;
-
-	// ── Beat / section tracking ───────────────────────────────────────────────
-	// P-Slice doesn't call beatHit/sectionHit on BaseStage via stagesFunc,
-	// so we detect changes manually in update().
-
-	var _lastBeat:Int    = -1;
-	var _lastSection:Int = -1;
-
-	// ── Tweens ────────────────────────────────────────────────────────────────
 
 	var followTween:FlxTween;
 	var zoomTween:FlxTween;
@@ -73,135 +58,104 @@ class VSliceEvents extends BaseStage
 	var playerScrollTween:FlxTween;
 	var opponentScrollTween:FlxTween;
 
-	// ── Per-strumline scroll speed multipliers ────────────────────────────────
-	// effectiveSpeed = game.songSpeed × multSpeed.
-	// Stored as typed struct fields — inline anonymous objects can be GC'd by
-	// HScript; native Haxe struct instances are safe to tween.
-
 	var playerScrollMult:Float   = 1.0;
 	var opponentScrollMult:Float = 1.0;
-
 	var playerScrollObj   = {v: 1.0};
 	var opponentScrollObj = {v: 1.0};
 
-	// ── BaseStage lifecycle ───────────────────────────────────────────────────
+	// ── Lifecycle ─────────────────────────────────────────────────────────────
 
 	override function createPost():Void
 	{
-		camFollowPoint.setPosition(game.camFollow.x, game.camFollow.y);
-		camZoom = game.defaultCamZoom;
-
-		// Expose helpers so Lua/HScript sibling scripts can call them.
+		// Expose so Lua/HScript siblings can call these
 		game.setOnHScript('tweenCameraToPosition', tweenCameraToPosition);
-		game.setOnHScript('tweenCameraZoom', tweenCameraZoom);
-		game.setOnHScript('getFollowCharacter', getFollowCharacter);
-		game.setOnHScript('getFollowPoint', getFollowPoint);
+		game.setOnHScript('tweenCameraZoom',       tweenCameraZoom);
+		game.setOnHScript('getFollowCharacter',    getFollowCharacter);
+		game.setOnHScript('getFollowPoint',        getFollowPoint);
+
+		// Mirror VSliceGeneral onCreatePost exactly:
+		//   camFollowPoint.setPosition(game.camFollow.x, game.camFollow.y);
+		//   curCamera.zoom = game.defaultCamZoom;
+		camFollowPoint.setPosition(game.camFollow.x, game.camFollow.y);
+		curCamera.zoom = game.defaultCamZoom;
+		curCamera.bop  = 1.0;
 
 		game.setOnScripts('isMoveCameraEvent', false);
 		game.setOnScripts('camZoomRateOffset', 0.0);
-
-		// Signal to VSliceGeneral.hx (HScript) that the compiled version is active.
-		// VSliceGeneral checks 'vsliceEventsNative' in its onCreatePost and defers
-		// to this class entirely, preventing both from handling events simultaneously.
 		game.setOnScripts('vsliceEventsNative', true);
 	}
+
+	// ── update — mirrors VSliceGeneral's onUpdatePost exactly ─────────────────
 
 	override function update(elapsed:Float):Void
 	{
 		super.update(elapsed);
 
-		// ── Per-strumline scroll speeds ───────────────────────────────────────
+		// Per-strumline scroll speeds
 		if (playerScrollMult != 1.0 || opponentScrollMult != 1.0)
 		{
-			game.notes.forEachAlive(function(daNote:Note)
-			{
+			game.notes.forEachAlive(function(daNote:Note) {
 				final target:Float = daNote.mustPress ? playerScrollMult : opponentScrollMult;
 				if (Math.abs(daNote.multSpeed - target) > 0.001)
 					daNote.multSpeed = target;
 			});
 		}
 
-		// ── VSlice camera follow ──────────────────────────────────────────────
-		if (!(@:privateAccess game.isCameraOnForcedPos) && isCamFollowVSlice)
+		// Camera follow — VSliceGeneral onUpdatePost:
+		//   if (!game.isCameraOnForcedPos && isCamFollowVSlice) {
+		//       if (FlxG.camera.target != camFollowPoint) {
+		//           FlxG.camera.followLerp = 0;
+		//           FlxG.camera.scroll.set(camFollowPoint.x - width/2, camFollowPoint.y - height/2);
+		//       }
+		//   }
+		// When target == camFollowPoint (set by followPsychCamera's FlxG.camera.follow call),
+		// Flixel handles scroll automatically with lerp=0. We only force-write scroll
+		// when target is null (set by tweenCameraToPosition).
+		if (!(@:privateAccess game.isCameraOnForcedPos) && isCamFollowVSlice && !game.endingSong)
 		{
 			if (FlxG.camera.target != camFollowPoint)
 			{
 				FlxG.camera.followLerp = 0;
 				FlxG.camera.scroll.set(
-					camFollowPoint.x - FlxG.camera.width  * 0.5,
-					camFollowPoint.y - FlxG.camera.height * 0.5
+					camFollowPoint.x - FlxG.camera.width  / 2,
+					camFollowPoint.y - FlxG.camera.height / 2
 				);
 			}
 		}
+		else if (isCamFollowVSlice && game.endingSong)
+		{
+			// Song is ending (cutscene playing) — hand camera back to game.camFollow.
+			// First sync game.camFollow to camFollowPoint's current position so the
+			// camera stays exactly where it is — no snap back to BF/dad position.
+			if (followTween != null) { followTween.cancel(); followTween = null; }
+			game.camFollow.setPosition(camFollowPoint.x, camFollowPoint.y);
+			isCamFollowVSlice = false;
+			FlxG.camera.follow(game.camFollow, LOCKON, 0);
+		}
 
-		// ── VSlice camera zoom + bop ──────────────────────────────────────────
+		// Camera zoom — VSliceGeneral onUpdatePost:
 		if (isCamZoomVSlice)
 		{
 			if (isCameraBop) camZoomingVSlice = true;
+
 			if (camZoomingVSlice)
 			{
 				game.camZooming = false;
-				camBop = FlxMath.lerp(1, camBop, Math.exp(-elapsed * 3.125 * game.camZoomingDecay * game.playbackRate));
-				game.camHUD.zoom = FlxMath.lerp(1, game.camHUD.zoom, Math.exp(-elapsed * 3.125 * game.camZoomingDecay * game.playbackRate));
+				curCamera.bop = FlxMath.lerp(1, curCamera.bop,
+					Math.exp(-elapsed * 3.125 * game.camZoomingDecay * game.playbackRate));
+				game.camHUD.zoom = FlxMath.lerp(1, game.camHUD.zoom,
+					Math.exp(-elapsed * 3.125 * game.camZoomingDecay * game.playbackRate));
 			}
-			FlxG.camera.zoom = camZoom + (camZoomingVSlice ? (camBop - 1) : 0);
+
+			FlxG.camera.zoom = curCamera.zoom + (camZoomingVSlice ? (curCamera.bop - 1) : 0);
 		}
 		else
 		{
 			if (isCameraBop) game.camZooming = true;
 		}
-
-		// ── Beat detection (replaces beatHit override) ────────────────────────
-		final beat:Int = curBeat;
-		if (beat != _lastBeat)
-		{
-			_lastBeat = beat;
-			_onBeatHit(beat);
-		}
-
-		// ── Section detection (replaces sectionHit override) ─────────────────
-		final section:Int = curSection;
-		if (section != _lastSection)
-		{
-			_lastSection = section;
-			_onSectionHit(section);
-		}
 	}
 
-	function _onBeatHit(beat:Int):Void
-	{
-		final beatCheck:Bool = camZoomRate > 0
-			&& Math.round(beat - camZoomRateOffset) % Math.round(camZoomRate) == 0;
-
-		if (isCamZoomVSlice && camZoomingVSlice && FlxG.camera.zoom < 1.35
-			&& ClientPrefs.data.camZooms && beatCheck)
-		{
-			camBop += 0.015 * game.camZoomingMult;
-			game.camHUD.zoom += 0.03 * game.camZoomingMult;
-		}
-
-		if (!isCamZoomVSlice && game.camZooming && FlxG.camera.zoom < 1.35
-			&& ClientPrefs.data.camZooms && beatCheck)
-		{
-			game.camGame.zoom += 0.015 * game.camZoomingMult;
-			game.camHUD.zoom  += 0.03  * game.camZoomingMult;
-		}
-	}
-
-	function _onSectionHit(section:Int):Void
-	{
-		if (PlayState.SONG.notes[section] != null)
-		{
-			if (!isCamZoomVSlice && game.camZooming && FlxG.camera.zoom < 1.35
-				&& ClientPrefs.data.camZooms)
-			{
-				game.camGame.zoom -= 0.015 * game.camZoomingMult;
-				game.camHUD.zoom  -= 0.03  * game.camZoomingMult;
-			}
-		}
-	}
-
-	// ── Note hit hooks ────────────────────────────────────────────────────────
+	// ── Note hit hooks (mirrors VSliceGeneral) ────────────────────────────────
 
 	override function goodNoteHit(note:Note):Void
 	{
@@ -214,48 +168,88 @@ class VSliceEvents extends BaseStage
 		if (isCamZoomVSlice) camZoomingVSlice = true;
 	}
 
-	// ── Event handler ─────────────────────────────────────────────────────────
+	// ── Beat/Section hit (mirrors VSliceGeneral onBeatHit/onSectionHit) ───────
+
+	override function beatHit():Void
+	{
+		// Guard camZoomRate > 0 BEFORE the modulo — rate=0 means "never bop"
+		// but x % 0 is a division by zero crash on native targets.
+		if (camZoomRate > 0)
+		{
+			final beatMod = Math.round(curBeat - camZoomRateOffset) % Math.round(camZoomRate);
+
+			if (isCamZoomVSlice && camZoomingVSlice && FlxG.camera.zoom < 1.35
+				&& ClientPrefs.data.camZooms && beatMod == 0)
+			{
+				curCamera.bop    += 0.015 * game.camZoomingMult;
+				game.camHUD.zoom += 0.03  * game.camZoomingMult;
+			}
+
+			if (!isCamZoomVSlice && game.camZooming && FlxG.camera.zoom < 1.35
+				&& ClientPrefs.data.camZooms && beatMod == 0)
+			{
+				game.camGame.zoom += 0.015 * game.camZoomingMult;
+				game.camHUD.zoom  += 0.03  * game.camZoomingMult;
+			}
+		}
+	}
+
+	override function sectionHit():Void
+	{
+		if (PlayState.SONG.notes[curSection] != null)
+		{
+			if (!isCamZoomVSlice && game.camZooming && FlxG.camera.zoom < 1.35
+				&& ClientPrefs.data.camZooms)
+			{
+				game.camGame.zoom -= 0.015 * game.camZoomingMult;
+				game.camHUD.zoom  -= 0.03  * game.camZoomingMult;
+			}
+		}
+	}
+
+	// ── Event handler (mirrors VSliceGeneral onEvent exactly) ─────────────────
 
 	override function eventCalled(eventName:String, value1:String, value2:String,
 		flValue1:Null<Float>, flValue2:Null<Float>, strumTime:Float):Void
 	{
+		var v1:Dynamic = value1;
+		var v2:Dynamic = value2;
+
 		switch (eventName)
 		{
 			case 'FocusCamera':
-				if (value1 == '' && value2 == '')
-				{
-					followPsychCamera(true);
-				}
+				if (v1 == '' && v2 == '') followPsychCamera(true);
 				else
 				{
 					if (@:privateAccess game.isCameraOnForcedPos) return;
 
-					final v1 = value1.split(',').map(s -> s.trim());
-					final v2 = value2.split(',').map(s -> s.trim());
+					v1 = (v1 : String).split(',').map(s -> s.trim());
+					v2 = (v2 : String).split(',').map(s -> s.trim());
 
 					var targetX:Float  = parseFloatNull(v1[0]) ?? DEFAULT_POS;
 					var targetY:Float  = parseFloatNull(v1[1]) ?? DEFAULT_POS;
-					final char:String  = parseStrNull(v2[0]) ?? 'bf';
-					final dur:Float    = parseFloatNull(v2[1]) ?? DEFAULT_DURATION;
+					final char:String  = parseStrNull(v2[0]) ?? Std.string(DEFAULT_POS);
+					final duration:Float = parseFloatNull(v2[1]) ?? DEFAULT_DURATION;
 					final ease:String  = parseStrNull(v2[2]) ?? DEFAULT_FOCUS_EASE;
-					final edir:String  = parseStrNull(v2[3]) ?? DEFAULT_EASE_DIR;
-					final combined:String = combineEase(ease, edir);
+					final easeDir:String = parseStrNull(v2[3]) ?? DEFAULT_EASE_DIR;
+					final combinedEase = combineEase(ease, easeDir);
 
 					switch (char.toLowerCase().trim())
 					{
-						case 'gf' | 'girlfriend' | '2':
+						case 'gf', 'girlfriend', '2':
 							final pt = getFollowCharacter('gf');
 							targetX += pt.x; targetY += pt.y;
 							game.callOnScripts('onMoveCameraEvent', ['gf']);
-						case 'dad' | 'opponent' | '1':
+						case 'dad', 'opponent', '1':
 							final pt = getFollowCharacter('dad');
 							targetX += pt.x; targetY += pt.y;
 							game.callOnScripts('onMoveCameraEvent', ['dad']);
-						case 'bf' | 'boyfriend' | '0':
+						case 'bf', 'boyfriend', '0':
 							final pt = getFollowCharacter('bf');
 							targetX += pt.x; targetY += pt.y;
 							game.callOnScripts('onMoveCameraEvent', ['boyfriend']);
-						case '-1': // raw position — no character offset
+						case '-1':
+							// raw position, no character offset
 						default:
 					}
 
@@ -267,248 +261,271 @@ class VSliceEvents extends BaseStage
 						case 'INSTANT':
 							tweenCameraToPosition(targetX, targetY, 0);
 						default:
-							final durSecs = Conductor.stepCrochet * dur / 1000;
-							tweenCameraToPosition(targetX, targetY, durSecs, combined, true);
+							final durSeconds = Conductor.stepCrochet * duration / 1000;
+							tweenCameraToPosition(targetX, targetY, durSeconds, combinedEase, true);
 					}
 
 					game.setOnScripts('isMoveCameraEvent', true);
 				}
 
 			case 'ZoomCamera':
-				if (value1 == '' && value2 == '')
-				{
-					isCamZoomVSlice = false;
-					zoomTweenActive  = false;
-				}
+				if (v1 == '' && v2 == '') { isCamZoomVSlice = false; zoomTweenVSlice = false; }
 				else
 				{
-					final v2 = value2.split(',').map(s -> s.trim());
-					final zoom:Float  = parseFloatNull(value1) ?? DEFAULT_ZOOM;
-					final dur:Float   = parseFloatNull(v2[0]) ?? DEFAULT_DURATION;
-					final ease:String = parseStrNull(v2[1]) ?? DEFAULT_EASE;
-					final isDirect    = (parseStrNull(v2[2]) ?? DEFAULT_MODE) == 'direct';
-					final edir:String = parseStrNull(v2[3]) ?? DEFAULT_EASE_DIR;
+					v2 = (v2 : String).split(',').map(s -> s.trim());
+
+					final zoom:Float        = parseFloatNull(v1) ?? DEFAULT_ZOOM;
+					final duration:Float    = parseFloatNull(v2[0]) ?? DEFAULT_DURATION;
+					final ease:String       = parseStrNull(v2[1]) ?? DEFAULT_EASE;
+					final isDirectMode:Bool = (parseStrNull(v2[2]) ?? DEFAULT_MODE) == 'direct';
+					final easeDir:String    = parseStrNull(v2[3]) ?? DEFAULT_EASE_DIR;
+					final combinedEase      = combineEase(ease, easeDir);
 
 					switch (ease.toUpperCase().trim())
 					{
 						case 'INSTANT':
-							tweenCameraZoom(zoom, 0, isDirect);
+							tweenCameraZoom(zoom, 0, isDirectMode);
 						default:
-							tweenCameraZoom(zoom, Conductor.stepCrochet * dur / 1000,
-								isDirect, combineEase(ease, edir), true);
+							final durSeconds = Conductor.stepCrochet * duration / 1000;
+							tweenCameraZoom(zoom, durSeconds, isDirectMode, combinedEase, true);
 					}
 				}
 
 			case 'SetCameraBop':
-				if (value1 == '' && value2 == '')
-				{
-					resetCameraRate();
-				}
+				if (v1 == '' && v2 == '') resetCameraRate();
 				else
 				{
 					isCameraBop = true;
-					final v2 = value2.split(',').map(s -> s.trim());
-					camZoomRate = parseFloatNull(value1) ?? DEFAULT_RATE;
-					game.camZoomingMult = parseFloatNull(v2[0]) ?? DEFAULT_BOP_INTENSITY;
-					camZoomRateOffset   = parseFloatNull(v2[1]) ?? 0.0;
-					game.setOnScripts('camZoomRateOffset', camZoomRateOffset);
+
+					v2 = (v2 : String).split(',').map(s -> s.trim());
+
+					camZoomRate = parseFloatNull(v1) ?? DEFAULT_RATE;
+
+					final intensity:Float = parseFloatNull(v2[0]) ?? DEFAULT_BOP_INTENSITY;
+					game.camZoomingMult   = intensity;
+
+					final offset:Float    = parseFloatNull(v2[1]) ?? 0.0;
+					camZoomRateOffset     = offset;
+					game.setOnScripts('camZoomRateOffset', offset);
 				}
 
 			case 'SetTargetBopSpeed':
-				final target = (parseStrNull(value1) ?? 'boyfriend').toLowerCase().trim();
-				final rate   = Std.int(parseFloatNull(value2) ?? 1.0);
+				final target = (parseStrNull(v1) ?? 'boyfriend').toLowerCase().trim();
+				final bopRate:Float = parseFloatNull(v2) ?? 1.0;
 				switch (target)
 				{
-					case 'boyfriend' | 'bf' | 'player':   game.boyfriend.danceEveryNumBeats = rate;
-					case 'dad' | 'opponent':               game.dad.danceEveryNumBeats = rate;
-					case 'girlfriend' | 'gf':              game.gf.danceEveryNumBeats = rate;
+					case 'boyfriend' | 'bf' | 'player':
+						if (game.boyfriend != null) game.boyfriend.danceEveryNumBeats = Std.int(bopRate);
+					case 'dad' | 'opponent':
+						if (game.dad != null) game.dad.danceEveryNumBeats = Std.int(bopRate);
+					case 'girlfriend' | 'gf':
+						if (game.gf != null) game.gf.danceEveryNumBeats = Std.int(bopRate);
 					default:
-						if (game.modchartSprites.exists(target))
-							game.modchartSprites.get(target).danceEveryNumBeats = rate;
 				}
 
 			case 'ScrollSpeed':
-				final v2 = value2.split(',').map(s -> s.trim());
-				final scroll   = parseFloatNull(value1) ?? 1.0;
-				final dur      = parseFloatNull(v2[0]) ?? DEFAULT_DURATION;
-				final ease     = parseStrNull(v2[1]) ?? DEFAULT_EASE;
-				final edir     = parseStrNull(v2[2]) ?? DEFAULT_EASE_DIR;
-				final absolute = parseBoolNull(v2[3]) ?? false;
-				final strum    = parseStrNull(v2[4]) ?? 'both';
-				final combined = combineEase(ease, edir);
+				v2 = (v2 : String).split(',').map(s -> s.trim());
 
-				final base:Float   = absolute ? 1.0 : (PlayState.SONG.speed ?? 1.0);
-				final target:Float = scroll * base;
+				final scroll:Float       = parseFloatNull(v1) ?? 1.0;
+				final scrollDur:Float    = parseFloatNull(v2[0]) ?? DEFAULT_DURATION;
+				final scrollEase:String  = parseStrNull(v2[1]) ?? DEFAULT_EASE;
+				final scrollDir:String   = parseStrNull(v2[2]) ?? DEFAULT_EASE_DIR;
+				final absolute:Bool      = parseBoolNull(v2[3]) ?? false;
+				final strumline:String   = parseStrNull(v2[4]) ?? 'both';
+				final combinedScroll     = combineEase(scrollEase, scrollDir);
 
-				switch (strum.toLowerCase().trim())
+				final baseSpeed:Float    = absolute ? 1.0 : (PlayState.SONG.speed ?? 1.0);
+				final targetSpeed:Float  = scroll * baseSpeed;
+
+				switch (strumline.toLowerCase().trim())
 				{
 					case 'player':
 						if (playerScrollTween != null) playerScrollTween.cancel();
-						if (ease.toUpperCase() == 'INSTANT')
-						{
-							playerScrollMult = target / game.songSpeed;
-						}
-						else
-						{
+						if (scrollEase.toUpperCase() == 'INSTANT')
+							playerScrollMult = targetSpeed / game.songSpeed;
+						else {
+							final dur = Conductor.stepCrochet * scrollDur / 1000;
+							final end = targetSpeed / game.songSpeed;
 							playerScrollObj.v = playerScrollMult;
-							playerScrollTween = FlxTween.tween(
-								playerScrollObj, {v: target / game.songSpeed},
-								(Conductor.stepCrochet * dur / 1000) / game.playbackRate,
-								{
-									ease: LuaUtils.getTweenEaseByString(combined),
+							playerScrollTween = FlxTween.tween(playerScrollObj, {v: end},
+								dur / game.playbackRate, {
+									ease: LuaUtils.getTweenEaseByString(combinedScroll),
 									onUpdate: _ -> playerScrollMult = playerScrollObj.v
-								}
-							);
+								});
 						}
 
 					case 'opponent':
 						if (opponentScrollTween != null) opponentScrollTween.cancel();
-						if (ease.toUpperCase() == 'INSTANT')
-						{
-							opponentScrollMult = target / game.songSpeed;
-						}
-						else
-						{
+						if (scrollEase.toUpperCase() == 'INSTANT')
+							opponentScrollMult = targetSpeed / game.songSpeed;
+						else {
+							final dur = Conductor.stepCrochet * scrollDur / 1000;
+							final end = targetSpeed / game.songSpeed;
 							opponentScrollObj.v = opponentScrollMult;
-							opponentScrollTween = FlxTween.tween(
-								opponentScrollObj, {v: target / game.songSpeed},
-								(Conductor.stepCrochet * dur / 1000) / game.playbackRate,
-								{
-									ease: LuaUtils.getTweenEaseByString(combined),
+							opponentScrollTween = FlxTween.tween(opponentScrollObj, {v: end},
+								dur / game.playbackRate, {
+									ease: LuaUtils.getTweenEaseByString(combinedScroll),
 									onUpdate: _ -> opponentScrollMult = opponentScrollObj.v
-								}
-							);
+								});
 						}
 
-					default: // 'both'
+					default: // both
 						if (playerScrollTween   != null) playerScrollTween.cancel();
 						if (opponentScrollTween != null) opponentScrollTween.cancel();
 						playerScrollMult = opponentScrollMult = 1.0;
 						if (scrollTween != null) scrollTween.cancel();
-						if (ease.toUpperCase() == 'INSTANT')
-						{
-							game.songSpeed = target;
-						}
-						else
-						{
-							scrollTween = FlxTween.tween(game, {songSpeed: target},
-								(Conductor.stepCrochet * dur / 1000) / game.playbackRate,
-								{ease: LuaUtils.getTweenEaseByString(combined)});
+						if (scrollEase.toUpperCase() == 'INSTANT')
+							game.songSpeed = targetSpeed;
+						else {
+							final dur = Conductor.stepCrochet * scrollDur / 1000;
+							scrollTween = FlxTween.tween(game, {songSpeed: targetSpeed},
+								dur / game.playbackRate, {
+									ease: LuaUtils.getTweenEaseByString(combinedScroll)
+								});
 						}
 				}
 
 			case 'Camera Follow Pos':
-				if ((@:privateAccess game.isCameraOnForcedPos) && FlxG.camera.target != game.camFollow)
-					followPsychCamera(true);
+				if (@:privateAccess game.isCameraOnForcedPos)
+					if (FlxG.camera.target != game.camFollow) followPsychCamera(true);
 
 			case 'Add Camera Zoom':
 				if (isCamZoomVSlice)
 				{
-					camBop += parseFloatNull(value1) ?? 0.015;
-					game.camHUD.zoom += parseFloatNull(value2) ?? 0.03;
+					curCamera.bop    += parseFloatNull(v1) ?? 0.015;
+					game.camHUD.zoom += parseFloatNull(v2) ?? 0.03;
 				}
 		}
 	}
 
-	// ── Public helpers (exposed to HScript / Lua siblings) ────────────────────
+	// ── GameOver hooks (mirrors VSliceGeneral) ────────────────────────────────
 
-	public function getFollowCharacter(char:String):FlxPoint
+	override function gameOverStart(SubState:GameOverSubstate):Void
 	{
-		// Note: GameOverSubstate.instance is typed as FlxState which has no character fields,
-		// so we always use game (PlayState) directly. This function only runs during gameplay.
-		switch (char.toLowerCase().trim())
+		tweenCameraZoom(game.defaultCamZoom, DEFAULT_DURATION, true, 'expoOut');
+	}
+
+	// ── Public API (exposed to sibling scripts via setOnHScript) ──────────────
+
+	public function getFollowCharacter(char:Dynamic):Point
+	{
+		final c = Std.string(char);
+
+		switch (c)
 		{
-			case 'gf' | 'girlfriend' | '2':
-				if (game.gf == null) return FlxPoint.get();
-				return FlxPoint.get(
-					game.gf.getMidpoint().x + game.gf.cameraPosition[0] + game.girlfriendCameraOffset[0],
-					game.gf.getMidpoint().y + game.gf.cameraPosition[1] + game.girlfriendCameraOffset[1]
+			case 'gf', 'girlfriend', '2':
+				if (game.gf == null) return new Point();
+				return new Point(
+					game.gf.getMidpoint().x + game.gf.cameraPosition[0]    + game.girlfriendCameraOffset[0],
+					game.gf.getMidpoint().y + game.gf.cameraPosition[1]    + game.girlfriendCameraOffset[1]
 				);
-			case 'dad' | 'opponent' | '1':
-				if (game.dad == null) return FlxPoint.get();
-				return FlxPoint.get(
+			case 'dad', 'opponent', '1':
+				if (game.dad == null) return new Point();
+				return new Point(
 					game.dad.getMidpoint().x + 150 + game.dad.cameraPosition[0] + game.opponentCameraOffset[0],
 					game.dad.getMidpoint().y - 100 + game.dad.cameraPosition[1] + game.opponentCameraOffset[1]
 				);
-			default: // bf
-				if (game.boyfriend == null) return FlxPoint.get();
-				return FlxPoint.get(
+			default:
+				if (game.boyfriend == null) return new Point();
+				return new Point(
 					game.boyfriend.getMidpoint().x - 100 + game.boyfriend.cameraPosition[0] + game.boyfriendCameraOffset[0],
 					game.boyfriend.getMidpoint().y - 100 + game.boyfriend.cameraPosition[1] + game.boyfriendCameraOffset[1]
 				);
 		}
 	}
 
-	public function getFollowPoint():FlxPoint
-	{
-		final pt = isCamFollowVSlice ? camFollowPoint : game.camFollow;
-		return pt != null ? FlxPoint.get(pt.x, pt.y) : FlxPoint.get();
-	}
-
+	// Mirror VSliceGeneral tweenCameraToPosition exactly:
+	//   isCamFollowVSlice = true; followTweenVSlice = true;
+	//   camFollowPoint seeded from current scroll
+	//   FlxG.camera.target = null   ← key: detaches follow, update() writes scroll manually
 	public function tweenCameraToPosition(x:Float, y:Float, ?duration:Float = 0,
 		?ease:String = 'linear', ?allowPlaybackRate:Bool = false):Void
 	{
 		if (@:privateAccess game.isCameraOnForcedPos) return;
+
 		isCamFollowVSlice = true;
-		followTweenActive = true;
+		followTweenVSlice = true;
+		allowPlaybackRate = allowPlaybackRate ?? false;
+
 		if (followTween != null) followTween.cancel();
 
+		// Seed camFollowPoint from current scroll so tween starts from where
+		// camera actually is, not where camFollowPoint was last set.
 		camFollowPoint.setPosition(
 			FlxG.camera.scroll.x + FlxG.camera.width  * 0.5,
 			FlxG.camera.scroll.y + FlxG.camera.height * 0.5
 		);
+
+		// Detach camera from any follow target so update() can write scroll directly.
 		FlxG.camera.target = null;
 
 		if (duration <= 0)
-		{
 			camFollowPoint.setPosition(x, y);
-		}
 		else
 		{
-			final rate = (allowPlaybackRate ?? false) ? game.playbackRate : 1.0;
-			followTween = FlxTween.tween(camFollowPoint, {x: x, y: y}, duration / rate, {
-				ease: LuaUtils.getTweenEaseByString(ease),
-				onComplete: _ -> followTweenActive = false
-			});
+			followTween = FlxTween.tween(camFollowPoint,
+				{x: x, y: y},
+				duration / (allowPlaybackRate ? game.playbackRate : 1),
+				{
+					ease: LuaUtils.getTweenEaseByString(ease),
+					onComplete: _ -> followTweenVSlice = false
+				}
+			);
 		}
 	}
 
+	// Mirror VSliceGeneral tweenCameraZoom exactly:
+	//   curCamera tweened directly — FlxG.camera.zoom written ONLY in update()
 	public function tweenCameraZoom(zoom:Float, ?duration:Float = 0, ?direct:Bool = false,
 		?ease:String = 'linear', ?allowPlaybackRate:Bool = false):Void
 	{
-		isCamZoomVSlice = true;
-		zoomTweenActive = true;
+		isCamZoomVSlice   = true;
+		zoomTweenVSlice   = true;
+		allowPlaybackRate = allowPlaybackRate ?? false;
+
 		if (zoomTween != null) zoomTween.cancel();
 
-		// camZoom is authoritative — do NOT sync from FlxG.camera.zoom here.
-		// FlxG.camera.zoom lags one frame (synced in update()), so reading it
-		// clobbers INSTANT zooms fired in the same frame before this tween starts.
-		final targetZoom = zoom * ((direct ?? false) ? FlxCamera.defaultZoom : game.defaultCamZoom);
+		final base:Float       = (direct ?? false) ? FlxCamera.defaultZoom : game.defaultCamZoom;
+		final targetZoom:Float = zoom * base;
 
 		if (duration <= 0)
-		{
-			camZoom = targetZoom;
-		}
+			curCamera.zoom = targetZoom;
 		else
 		{
-			final rate    = (allowPlaybackRate ?? false) ? game.playbackRate : 1.0;
-			final zoomObj = {v: camZoom};
-			zoomTween = FlxTween.tween(zoomObj, {v: targetZoom}, duration / rate, {
-				ease: LuaUtils.getTweenEaseByString(ease),
-				onUpdate:   _ -> camZoom = zoomObj.v,
-				onComplete: _ -> { camZoom = targetZoom; zoomTweenActive = false; }
-			});
+			zoomTween = FlxTween.tween(curCamera, {zoom: targetZoom},
+				duration / (allowPlaybackRate ? game.playbackRate : 1),
+				{
+					ease: LuaUtils.getTweenEaseByString(ease),
+					onComplete: _ -> zoomTweenVSlice = false
+				}
+			);
 		}
+	}
+
+	public function getFollowPoint():Point
+	{
+		final pt = isCamFollowVSlice ? camFollowPoint : game.camFollow;
+		return pt != null ? new Point(pt.x, pt.y) : new Point();
 	}
 
 	// ── Private helpers ───────────────────────────────────────────────────────
 
+	// Mirror VSliceGeneral followPsychCamera exactly:
+	//   setVar('isMoveCameraEvent', !isPsych)
+	//   isCamFollowVSlice = !isPsych; followTweenVSlice = false
+	//   FlxG.camera.follow(isPsych ? game.camFollow : camFollowPoint, LOCKON, 0)
+	// Note: when isPsych=false (VSlice mode) camera.target becomes camFollowPoint,
+	// so update()'s condition (target != camFollowPoint) is FALSE — Flixel handles
+	// scroll automatically with lerp=0. No manual scroll write needed.
 	function followPsychCamera(isPsych:Bool = false):Void
 	{
 		game.setOnScripts('isMoveCameraEvent', !isPsych);
+
 		isCamFollowVSlice = !isPsych;
-		followTweenActive = false;
+		followTweenVSlice = false;
+
 		if (followTween != null) followTween.cancel();
+
 		FlxG.camera.follow(
 			isPsych ? game.camFollow : camFollowPoint,
 			FlxCameraFollowStyle.LOCKON, 0
@@ -517,18 +534,15 @@ class VSliceEvents extends BaseStage
 
 	function resetCameraRate():Void
 	{
-		isCameraBop       = false;
-		camZoomRate       = DEFAULT_RATE;
-		camZoomRateOffset = 0.0;
+		isCameraBop         = false;
+		camZoomingVSlice    = false;
+		game.camZooming     = false;
+		camZoomRate         = DEFAULT_RATE;
 		game.camZoomingMult = DEFAULT_MULT;
+		camZoomRateOffset   = 0.0;
 		game.setOnScripts('camZoomRateOffset', 0.0);
 	}
 
-	/**
-	 * Mirrors V-Slice's EASE_TYPE_DIR_REGEX logic.
-	 * ease='expo' + easeDir='Out' → 'expoOut'
-	 * If ease already has a direction suffix, or is linear/INSTANT/CLASSIC, returns as-is.
-	 */
 	inline function combineEase(ease:String, easeDir:String):String
 	{
 		if (ease == null || ease == '') return DEFAULT_EASE;
