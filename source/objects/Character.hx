@@ -11,6 +11,8 @@ import haxe.Json;
 import backend.Song;
 import mikolka.stages.objects.TankmenBG;
 
+import states.PlayState;
+
 typedef CharacterFile = {
 	var animations:Array<AnimArray>;
 	var image:String;
@@ -49,6 +51,7 @@ class Character extends FlxSprite
 	public var extraData:Map<String, Dynamic> = new Map<String, Dynamic>();
 
 	public var isPlayer:Bool = false;
+	public var isGf:Bool = false;
 	public var curCharacter:String = DEFAULT_CHARACTER;
 
 	public var holdTimer:Float = 0;
@@ -334,8 +337,12 @@ class Character extends FlxSprite
 	{
 		if (!debugMode && !skipDance && !specialAnim)
 		{
+			var health = (PlayState.instance != null) ? PlayState.instance.health : 1.0; // Piece of shit wouldn't work because my dyslexic ass put it inside IF DANCEIDLE FOR FUCKS SAKE—
+			var isGf = (PlayState.instance != null && PlayState.instance.gf == this);
+			FlxG.log.add("Losing Idle? " + hasAnimation("losing-idle" + idleSuffix));
 			if(danceIdle)
 			{
+				
 				danced = !danced;
 
 				if (danced)
@@ -343,8 +350,27 @@ class Character extends FlxSprite
 				else
 					playAnim('danceLeft' + idleSuffix);
 			}
-			else if(hasAnimation('idle' + idleSuffix))
-				playAnim('idle' + idleSuffix);
+
+			else if(isPlayer && hasAnimation('idle' + idleSuffix)) {
+				if (health <= 0.5 && hasAnimation("losing-idle" + idleSuffix)) {
+					playAnim('losing-idle' + idleSuffix);
+				} else if (health > 1.5 && hasAnimation("win-idle" + idleSuffix)) {
+					playAnim('win-idle' + idleSuffix);
+				} else {
+					playAnim('idle' + idleSuffix); 
+				}
+			}
+			else if (!isGf && hasAnimation("idle" + idleSuffix)) {
+				if (health <= 0.5 && hasAnimation("win-idle" + idleSuffix)) {
+					playAnim('win-idle' + idleSuffix);
+				} else if (health > 1.5 && hasAnimation("losing-idle" + idleSuffix)) {
+					playAnim('losing-idle' + idleSuffix);
+				} else {
+					playAnim('idle' + idleSuffix); 
+				}
+			} else {
+				playAnim('idle' + idleSuffix); 
+			}
 		}
 	}
 

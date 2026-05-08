@@ -2175,37 +2175,20 @@ override public function update(elapsed:Float)
 }
 
 	// Health icon updaters
-	//ChatGPT remade the old vanilla icon bop lmfao
-//	{
-//		var lerpRatioFast = FlxMath.bound(Math.exp(-elapsed * 20 * playbackRate), 0, 1);
-//		var lerpRatioSlow = FlxMath.bound(Math.exp(-elapsed * 12 * playbackRate), 0, 1);
-//	
-//		// Player 1
-//		var target1 = (healthBar.percent < 20) ? 1.15 : 1.0;
-//		var mult1 = FlxMath.lerp(iconP1.scale.x, target1, (healthBar.percent < 20) ? lerpRatioFast : lerpRatioSlow);
-//		iconP1.scale.set(mult1, mult1);
-//		iconP1.updateHitbox();
-//		iconP1.centerOffsets();
-//	
-//		// Player 2
-//		var target2 = (healthBar.percent > 80) ? 1.15 : 1.0;
-//		var mult2 = FlxMath.lerp(iconP2.scale.x, target2, (healthBar.percent > 80) ? lerpRatioFast : lerpRatioSlow);
-//		iconP2.scale.set(mult2, mult2);
-//		iconP2.updateHitbox();
-//		iconP2.centerOffsets();
-//	}
+
 	// IconBopType - Bookmark
 	public dynamic function updateIconsScale(elapsed:Float)
 	{
 		switch(ClientPrefs.data.bopType) {
 			case "Normal":
-		var mult:Float = FlxMath.lerp(1, iconP1.scale.x, Math.exp(-elapsed * 9 * playbackRate));
-		iconP1.scale.set(mult, mult);
-		iconP1.updateHitbox();
+				var mult:Float = FlxMath.lerp(1, iconP1.scale.x, Math.exp(-elapsed * 9 * playbackRate));
+				iconP1.scale.set(mult, mult);
+				iconP1.updateHitbox();
 
-		var mult:Float = FlxMath.lerp(1, iconP2.scale.x, Math.exp(-elapsed * 9 * playbackRate));
-		iconP2.scale.set(mult, mult);
-		iconP2.updateHitbox();
+				var mult:Float = FlxMath.lerp(1, iconP2.scale.x, Math.exp(-elapsed * 9 * playbackRate));
+				iconP2.scale.set(mult, mult);
+				iconP2.updateHitbox();
+
 			case "Kade":
 				iconP1.setGraphicSize(Std.int(FlxMath.lerp(150, iconP1.width, 0.50)));
 				iconP2.setGraphicSize(Std.int(FlxMath.lerp(150, iconP2.width, 0.50)));
@@ -3765,7 +3748,13 @@ function opponentNoteHit(note:Note):Void
 			}
 
 			if (canPlay)
-				char.playAnim(animToPlay, true);
+					if (healthBar.percent > 70 && char.hasAnimation("losing-" + animToPlay)) {
+						char.playAnim("losing-" + animToPlay, true);
+					} else if (healthBar.percent < 30 && char.hasAnimation("win-" + animToPlay)) {
+						char.playAnim("win-" + animToPlay, true);
+					} else {
+						char.playAnim(animToPlay, true);
+					}
 			char.holdTimer = 0;
 		}
 	}
@@ -3818,9 +3807,11 @@ public function goodNoteHit(note:Note):Void
 	{
 		if (!note.noAnimation)
 		{
-			var animToPlay:String = singAnimations[Std.int(Math.abs(Math.min(singAnimations.length - 1, note.noteData)))] + note.animSuffix;
-
 			var char:Character = boyfriend;
+			var animToPlay:String = singAnimations[Std.int(Math.abs(Math.min(singAnimations.length - 1, note.noteData)))] + note.animSuffix;
+			// var losePre:String = "losing-";
+			// var winPre:String = "win-";
+
 			var animCheck:String = 'hey';
 			if (note.gfNote)
 			{
@@ -3841,7 +3832,13 @@ public function goodNoteHit(note:Note):Void
 				}
 
 				if (canPlay)
-					char.playAnim(animToPlay, true);
+					if (healthBar.percent > 70 && char.hasAnimation("win-" + animToPlay)) {
+						char.playAnim("win-" + animToPlay, true);
+					} else if (healthBar.percent < 30 && char.hasAnimation("losing-" + animToPlay)) {
+						char.playAnim("losing-" + animToPlay, true);
+					} else {
+						char.playAnim(animToPlay, true);
+					}
 				char.holdTimer = 0;
 
 				if (note.noteType == 'Hey!')
