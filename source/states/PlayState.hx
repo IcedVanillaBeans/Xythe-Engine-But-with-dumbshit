@@ -573,8 +573,10 @@ class PlayState extends MusicBeatState
 		watermark.setFormat(Paths.font("vcr.ttf"), 17, FlxColor.WHITE, LEFT, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
 		watermark.scrollFactor.set();
 		watermark.visible = !ClientPrefs.data.hideHud;
-
-		if (markType == "Minimal") {
+		if (markType == "Hidden") {
+			watermark.text = "";
+		}
+		else if (markType == "Minimal") {
 			watermark.text = "[XE]";
 		} else if (markType == "Small") {
 			watermark.text = "[XE | " + SONG.song + "]";
@@ -1995,6 +1997,33 @@ override public function update(elapsed:Float)
 			openChartEditor();
 		else if (controls.justPressed('debug_2'))
 			openCharacterEditor();
+		else if (controls.justPressed('quickReset')) {
+			PlayState.instance.paused = true; // For lua
+			FlxG.sound.music.volume = 0;
+			PlayState.instance.vocals.volume = 0;
+			MusicBeatState.resetState();
+		}
+		else if (controls.justPressed('quickQuit')) {
+			#if DISCORD_ALLOWED DiscordClient.resetClientID(); #end
+			PlayState.deathCounter = 0;
+			PlayState.seenCutscene = false;
+
+			PlayState.instance.canResync = false;
+			// ! not yet
+			// Mods.loadTopMod();
+			if (PlayState.isStoryMode)
+			{
+				PlayState.storyPlaylist = [];
+				openSubState(new StickerSubState(null, (sticker) -> new StoryMenuState(sticker)));
+			}
+			else
+			{
+				openSubState(new StickerSubState(null, (sticker) -> FreeplayState.build(null, sticker)));
+			}
+			PlayState.changedDifficulty = false;
+			PlayState.chartingMode = false;
+			FlxG.camera.followLerp = 0;
+		}
 	}
 
 	if (healthBar.bounds.max != null && health > healthBar.bounds.max)

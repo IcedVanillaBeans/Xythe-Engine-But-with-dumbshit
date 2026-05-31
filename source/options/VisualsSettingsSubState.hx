@@ -126,7 +126,7 @@ class VisualsSettingsSubState extends BaseOptionsMenu
 			"How do you want the watermark to be displayed?",
 			"watermarkType",
 			STRING,
-			["Minimal", "Small", "Normal", "Large"]);
+			["Hidden", "Minimal", "Small", "Normal", "Large"]);
 		addOption(option);
 		
 		var option:Option = new Option("Icon Bop type:",
